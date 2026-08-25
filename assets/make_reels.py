@@ -37,7 +37,7 @@ TEXT = (231, 237, 243)
 MUTED = (138, 160, 180)
 SCRIM = (7, 11, 16)
 
-CHAT_TOP = 250
+CHAT_TOP = 350
 CHAT_BOTTOM = 1560
 SIDE = 60
 COL_W = 960
@@ -96,29 +96,57 @@ def rounded(canvas: Image.Image, box, radius: int, fill) -> None:
 
 
 # --- Экраны ----------------------------------------------------------------
-def draw_chrome(canvas: Image.Image) -> None:
-    """Статус-бар, шапка чата и поле ввода — чтобы кадр читался как скриншот."""
-    draw = ImageDraw.Draw(canvas)
-    draw.rectangle([0, 0, W, 210], fill=HEADER)
-    draw.text((60, 18), "9:41", font=F_SMALL, fill=TEXT)
-    for index in range(3):
-        x = W - 210 + index * 52
-        draw.rounded_rectangle([x, 26, x + 38, 50], radius=8,
-                               fill=TEXT if index < 2 else MUTED)
+BOT_TITLE = "Brief"
+BOT_HANDLE = "@brief7_bot"
 
-    draw.line([(30, 135), (54, 111)], fill=TEXT, width=6)
-    draw.line([(30, 135), (54, 159)], fill=TEXT, width=6)
+
+def draw_chrome(canvas: Image.Image) -> None:
+    """Оформление iOS: Dynamic Island, шапка с центрированным именем,
+    аватар справа, поле ввода и индикатор home внизу."""
+    draw = ImageDraw.Draw(canvas)
+    draw.rectangle([0, 0, W, 300], fill=HEADER)
+
+    # Статус-бар
+    draw.text((92, 44), "9:41", font=F_SMALL, fill=TEXT)
+    for index in range(4):                                   # уровень сигнала
+        x = W - 240 + index * 22
+        height = 12 + index * 8
+        draw.rounded_rectangle([x, 66 - height, x + 14, 66], radius=4, fill=TEXT)
+    for index, radius in enumerate((30, 20, 10)):            # wi-fi
+        cx, cy = W - 150, 70
+        draw.arc([cx - radius, cy - radius, cx + radius, cy + radius],
+                 start=215, end=325, fill=TEXT, width=6)
+    draw.ellipse([W - 154, 62, W - 146, 70], fill=TEXT)
+    draw.rounded_rectangle([W - 108, 40, W - 44, 70], radius=9, outline=TEXT, width=4)
+    draw.rounded_rectangle([W - 104, 44, W - 64, 66], radius=6, fill=TEXT)
+    draw.rounded_rectangle([W - 40, 50, W - 34, 60], radius=3, fill=TEXT)
+
+    # Dynamic Island
+    draw.rounded_rectangle([(W - 320) // 2, 30, (W + 320) // 2, 122], radius=46, fill=(0, 0, 0))
+
+    # Шапка чата
+    draw.line([(44, 222), (76, 190)], fill=(94, 165, 240), width=7)
+    draw.line([(44, 222), (76, 254)], fill=(94, 165, 240), width=7)
+
+    title_w = draw.textlength(BOT_TITLE, font=F_NAME)
+    draw.text(((W - title_w) / 2, 172), BOT_TITLE, font=F_NAME, fill=TEXT)
+    handle_w = draw.textlength(BOT_HANDLE, font=F_SMALL)
+    draw.text(((W - handle_w) / 2, 232), BOT_HANDLE, font=F_SMALL, fill=MUTED)
 
     avatar = Image.open(ASSETS / "avatar_monogram.png").resize((104, 104), Image.LANCZOS)
     mask = Image.new("L", (104, 104), 0)
     ImageDraw.Draw(mask).ellipse([0, 0, 104, 104], fill=255)
-    canvas.paste(avatar, (110, 83), mask)
+    canvas.paste(avatar, (W - 150, 148), mask)
 
-    draw.text((246, 88), "Brief", font=F_NAME, fill=TEXT)
-    draw.text((246, 142), "bot", font=F_SMALL, fill=MUTED)
-
-    draw.rounded_rectangle([40, 1770, 1040, 1866], radius=48, fill=HEADER)
-    draw.text((84, 1799), "Сообщение", font=F_BODY, fill=MUTED)
+    # Поле ввода и индикатор home
+    draw.ellipse([48, 1782, 108, 1842], outline=MUTED, width=5)
+    draw.line([(78, 1798), (78, 1826)], fill=MUTED, width=5)
+    draw.line([(64, 1812), (92, 1812)], fill=MUTED, width=5)
+    draw.rounded_rectangle([130, 1774, 950, 1850], radius=38, fill=(28, 40, 54))
+    draw.text((168, 1793), "Сообщение", font=F_BODY, fill=MUTED)
+    draw.rounded_rectangle([990, 1786, 1010, 1822], radius=10, fill=MUTED)
+    draw.arc([978, 1810, 1022, 1846], start=0, end=180, fill=MUTED, width=5)
+    draw.rounded_rectangle([(W - 380) // 2, 1888, (W + 380) // 2, 1898], radius=5, fill=(120, 132, 148))
 
 
 def build_column(state: dict) -> tuple[Image.Image, list[tuple[int, int, int, int]]]:
@@ -199,7 +227,7 @@ def render_state(state: dict) -> tuple[Image.Image, list[tuple[int, int, int, in
     column, boxes = build_column(state)
     top = min(CHAT_TOP, CHAT_BOTTOM - column.height)
     canvas.paste(column, (0, top), column)
-    canvas.paste(Image.new("RGB", (W, 210), HEADER), (0, 0))
+    canvas.paste(Image.new("RGB", (W, 300), HEADER), (0, 0))
     draw_chrome(canvas)
     shifted = [(x0, y0 + top, x1, y1 + top) for x0, y0, x1, y1 in boxes]
     return canvas, shifted
@@ -275,13 +303,13 @@ STEP6 = {
 
 STEP7 = {
     "title": "Шаг 7/7 · Контакт", "body": "Как с вами связаться?",
-    "buttons": [["📎 Отправить @vasya"], ["📱 Ввести телефон"], NAV],
+    "buttons": [["📎 Отправить @alex_m"], ["📱 Ввести телефон"], NAV],
 }
 
 CONFIRM = {
     "title": "Проверьте заявку",
     "body": "Тип: Приём заявок\nСфера: Красота\nФункции: Оплата в боте, Интеграция с CRM\n"
-            "Бюджет: 40 000 — 100 000 ₽\nСрок: 1 — 2 недели\nКонтакт: @vasya",
+            "Бюджет: 40 000 — 100 000 ₽\nСрок: 1 — 2 недели\nКонтакт: @alex_m",
     "hint": "Всё верно?",
     "buttons": [["🚀 Отправить", "✏️ Изменить"], ["✖️ Отменить"]],
 }
@@ -295,7 +323,7 @@ DONE = {
 
 ADMIN = {
     "title": "Заявка №1",
-    "body": "От: Вася @vasya\nКонтакт: @vasya\nТип: Приём заявок\nСфера: Красота\n"
+    "body": "От: Алексей @alex_m\nКонтакт: @alex_m\nТип: Приём заявок\nСфера: Красота\n"
             "Бюджет: 40 000 — 100 000 ₽\nСрок: 1 — 2 недели",
     "hint": "25.08.2026 14:30 · avito",
     "buttons": [["🔧 Взять в работу", "❌ Отклонить"]],
@@ -389,7 +417,7 @@ def build_frames():
             for step in range(7):
                 yield Image.blend(captioned, next_captioned, ease((step + 1) / 8))
 
-    yield from card_frames(CARD_OUT, 3.2)
+    yield from card_frames(CARD_OUT, 4.0)
 
 
 def main() -> None:
