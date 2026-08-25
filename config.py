@@ -10,7 +10,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
+ENV_PATH = BASE_DIR / ".env"
+# override=True: файл проекта важнее переменных окружения. Иначе забытый в системе
+# BOT_TOKEN от другого бота молча перебьёт .env, и запустится не тот бот.
+ENV_LOADED = load_dotenv(ENV_PATH, override=True)
 
 
 class ConfigError(RuntimeError):

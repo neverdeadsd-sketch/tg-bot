@@ -16,7 +16,7 @@ from aiogram.types import BotCommand, BotCommandScopeChat, BotCommandScopeDefaul
 
 import db
 import texts
-from config import Config, ConfigError, load_config, setup_logging
+from config import ENV_LOADED, ENV_PATH, Config, ConfigError, load_config, setup_logging
 from handlers import admin, common, order
 from middlewares import ThrottlingMiddleware
 
@@ -80,6 +80,10 @@ async def setup_commands(bot: Bot, config: Config) -> None:
 async def run() -> None:
     config = load_config()
     setup_logging(config.log_level)
+    logger.info(
+        "Конфигурация: %s (%s)", ENV_PATH,
+        "файл загружен" if ENV_LOADED else "файла нет, значения взяты из переменных окружения",
+    )
 
     db.setup(config.db_path)
     await db.init_db()
