@@ -244,7 +244,7 @@ def welcome_banner(width: int = 1600, height: int = 900,
 
 
 # --- Вертикальные карточки для Reels и историй ------------------------------
-def vertical_card(lines: list[str], subtitle: str = "", footer: str = "",
+def vertical_card(lines: list[str], subtitle: str = "", footer: str | list[str] = "",
                   palette=(NOIR_TOP, NOIR_BOTTOM), accent=PLATINUM,
                   width: int = 1080, height: int = 1920) -> Image.Image:
     """Титр 9:16: знак, крупный заголовок в несколько строк, подпись и футер."""
@@ -281,10 +281,14 @@ def vertical_card(lines: list[str], subtitle: str = "", footer: str = "",
 
     if footer:
         foot = font(MEDIUM, int(w * 0.046))
-        width_px = tracked_width(draw, footer, foot, w * 0.006)
-        canvas.alpha_composite(
-            gradient_fill(text_mask((w, h), (int((w - width_px) / 2), int(h * 0.855)), footer, foot, w * 0.006), accent)
-        )
+        rows = [footer] if isinstance(footer, str) else footer
+        fy = int(h * 0.845)
+        for row in rows:
+            width_px = tracked_width(draw, row, foot, w * 0.006)
+            canvas.alpha_composite(
+                gradient_fill(text_mask((w, h), (int((w - width_px) / 2), fy), row, foot, w * 0.006), accent)
+            )
+            fy += int(h * 0.038)
 
     flat = Image.new("RGB", canvas.size, (0, 0, 0))
     flat.paste(canvas, mask=canvas.split()[3])
@@ -305,7 +309,7 @@ def main() -> None:
         "reels_cta.png": vertical_card(
             ["Такой бот", "для вашего", "бизнеса"],
             subtitle="Оценка бесплатно, срок от 3 дней",
-            footer="@BRIEF7_BOT",
+            footer=["@BRIEF7_BOT", "НАПИСАТЬ: @SWORRK"],
         ),
     }
     for name, image in outputs.items():
