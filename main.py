@@ -10,7 +10,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramAPIError
+from aiogram.exceptions import TelegramAPIError, TelegramNetworkError, TelegramUnauthorizedError
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import BotCommand, BotCommandScopeChat, BotCommandScopeDefault, ErrorEvent
 
@@ -102,7 +102,19 @@ async def run() -> None:
             loop.add_signal_handler(sig, lambda: asyncio.create_task(dispatcher.stop_polling()))
 
     try:
-        me = await bot.get_me()
+        try:
+            me = await bot.get_me()
+        except TelegramUnauthorizedError:
+            logger.error(
+                "Telegram отклонил токен (Unauthorized). Проверьте BOT_TOKEN в %s: "
+                "токен должен быть целиком, без пробелов и кавычек. "
+                "Актуальный можно взять у @BotFather: /mybots -> бот -> API Token.",
+                ENV_PATH,
+            )
+            raise SystemExit(1) from None
+        except TelegramNetworkError as error:
+            logger.error("Нет связи с api.telegram.org: %s. Проверьте сеть и DNS сервера.", error)
+            raise SystemExit(1) from None
         logger.info("Запуск @%s (id=%s), админы: %s", me.username, me.id, config.admin_ids)
         await setup_commands(bot, config)
         await bot.delete_webhook(drop_pending_updates=True)
@@ -121,8 +133,9 @@ def main() -> None:
         logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
         logging.error("Ошибка конфигурации: %s", error)
         raise SystemExit(1) from error
-    except (KeyboardInterrupt, SystemExit):
+    except KeyboardInterrupt:
         logger.info("Выход по сигналу")
+    # SystemExit пробрасываем: systemd должен увидеть ненулевой код возврата
 
 
 if __name__ == "__main__":
