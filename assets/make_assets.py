@@ -243,6 +243,54 @@ def welcome_banner(width: int = 1600, height: int = 900,
     return add_grain(flat, 0.028).resize((width, height), Image.LANCZOS)
 
 
+# --- Вертикальные карточки для Reels и историй ------------------------------
+def vertical_card(lines: list[str], subtitle: str = "", footer: str = "",
+                  palette=(NOIR_TOP, NOIR_BOTTOM), accent=PLATINUM,
+                  width: int = 1080, height: int = 1920) -> Image.Image:
+    """Титр 9:16: знак, крупный заголовок в несколько строк, подпись и футер."""
+    w, h = width * SS, height * SS
+    base = vertical_gradient((w, h), *palette)
+    glow = Image.new("RGB", (w, h), (255, 255, 255))
+    base = Image.composite(glow, base, radial_glow((w, h), (0.5, 0.22), 0.55, 30))
+    base = Image.composite(Image.new("RGB", (w, h), (0, 0, 0)), base, vignette((w, h), 70))
+    canvas = base.convert("RGBA")
+    draw = ImageDraw.Draw(canvas)
+
+    side = int(w * 0.115)
+    mark(canvas, ((w - side) / 2, h * 0.255, (w + side) / 2, h * 0.255 + side), accent, 0.070)
+
+    title = font(SEMIBOLD, int(w * 0.105))
+    step = int(w * 0.128)
+    y = int(h * 0.435)
+    for line in lines:
+        width_px = tracked_width(draw, line, title, -w * 0.002)
+        canvas.alpha_composite(
+            gradient_fill(text_mask((w, h), (int((w - width_px) / 2), y), line, title, -w * 0.002), accent)
+        )
+        y += step
+
+    if subtitle:
+        sub = font(MEDIUM, int(w * 0.042))
+        width_px = tracked_width(draw, subtitle, sub, w * 0.002)
+        canvas.alpha_composite(
+            gradient_fill(
+                text_mask((w, h), (int((w - width_px) / 2), y + int(h * 0.020)), subtitle, sub, w * 0.002),
+                ((*MUTED,), (*MUTED,)),
+            )
+        )
+
+    if footer:
+        foot = font(MEDIUM, int(w * 0.046))
+        width_px = tracked_width(draw, footer, foot, w * 0.006)
+        canvas.alpha_composite(
+            gradient_fill(text_mask((w, h), (int((w - width_px) / 2), int(h * 0.855)), footer, foot, w * 0.006), accent)
+        )
+
+    flat = Image.new("RGB", canvas.size, (0, 0, 0))
+    flat.paste(canvas, mask=canvas.split()[3])
+    return add_grain(flat, 0.028).resize((width, height), Image.LANCZOS)
+
+
 def main() -> None:
     outputs = {
         "avatar_monogram.png": avatar_monogram(),
@@ -250,6 +298,15 @@ def main() -> None:
         "avatar_indigo.png": avatar_monogram(colors=CHAMPAGNE, palette=(INDIGO_TOP, INDIGO_BOTTOM)),
         "welcome.png": welcome_banner(),
         "welcome_indigo.png": welcome_banner(palette=(INDIGO_TOP, INDIGO_BOTTOM), accent=CHAMPAGNE),
+        "reels_hook.png": vertical_card(
+            ["Заявки теряются", "в переписке?"],
+            subtitle="Показываю, как это чинится за 3 дня",
+        ),
+        "reels_cta.png": vertical_card(
+            ["Такой бот", "для вашего", "бизнеса"],
+            subtitle="Оценка бесплатно, срок от 3 дней",
+            footer="@BRIEF7_BOT",
+        ),
     }
     for name, image in outputs.items():
         path = ASSETS / name
