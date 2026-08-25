@@ -17,10 +17,25 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-log "Ставим системные пакеты"
-export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq python3 python3-venv python3-pip git
+log "Проверяем системные пакеты"
+# На боевом сервере ставим только то, чего реально нет: лишний apt на машине
+# с nginx/haproxy/cloudflared может дёрнуть needrestart и перезапустить чужие
+# сервисы — вплоть до обрыва SSH-сессии.
+missing=()
+command -v git >/dev/null 2>&1 || missing+=(git)
+command -v python3 >/dev/null 2>&1 || missing+=(python3)
+dpkg -s python3-venv >/dev/null 2>&1 || missing+=(python3-venv)
+
+if [ ${#missing[@]} -gt 0 ]; then
+    echo "    ставим: ${missing[*]}"
+    export DEBIAN_FRONTEND=noninteractive
+    export NEEDRESTART_MODE=l      # только показать, что стоило бы перезапустить
+    export NEEDRESTART_SUSPEND=1   # ничего не перезапускать самостоятельно
+    apt-get update -qq
+    apt-get install -y -qq "${missing[@]}"
+else
+    echo "    всё уже установлено, apt не трогаем"
+fi
 
 log "Создаём пользователя ${APP_USER}"
 if ! id -u "$APP_USER" >/dev/null 2>&1; then
