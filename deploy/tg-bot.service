@@ -14,6 +14,9 @@ ExecStart=/opt/tg-bot/.venv/bin/python /opt/tg-bot/main.py
 # Перезапуск при падении и после потери сети
 Restart=always
 RestartSec=5
+# Неверный BOT_TOKEN или битый .env перезапуском не лечится: не мельтешим,
+# а останавливаемся с понятной ошибкой в журнале.
+RestartPreventExitStatus=78
 KillSignal=SIGTERM
 TimeoutStopSec=20
 

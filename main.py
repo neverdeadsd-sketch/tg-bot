@@ -22,6 +22,10 @@ from middlewares import ThrottlingMiddleware
 
 logger = logging.getLogger(__name__)
 
+# systemd не должен перезапускать бота по кругу из-за неверного .env:
+# на этот код возврата в юните стоит RestartPreventExitStatus.
+EXIT_BAD_CONFIG = 78
+
 USER_COMMANDS = [
     BotCommand(command="start", description="Меню"),
     BotCommand(command="cancel", description="Отменить заявку"),
@@ -111,7 +115,7 @@ async def run() -> None:
                 "Актуальный можно взять у @BotFather: /mybots -> бот -> API Token.",
                 ENV_PATH,
             )
-            raise SystemExit(1) from None
+            raise SystemExit(EXIT_BAD_CONFIG) from None
         except TelegramNetworkError as error:
             logger.error("Нет связи с api.telegram.org: %s. Проверьте сеть и DNS сервера.", error)
             raise SystemExit(1) from None
@@ -132,7 +136,7 @@ def main() -> None:
     except ConfigError as error:
         logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
         logging.error("Ошибка конфигурации: %s", error)
-        raise SystemExit(1) from error
+        raise SystemExit(EXIT_BAD_CONFIG) from error
     except KeyboardInterrupt:
         logger.info("Выход по сигналу")
     # SystemExit пробрасываем: systemd должен увидеть ненулевой код возврата
