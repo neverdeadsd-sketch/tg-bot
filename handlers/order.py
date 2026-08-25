@@ -440,9 +440,11 @@ async def submit_order(
         return
 
     labels = answer_labels(answers)
+    source = await db.get_user_source(user.id)
     try:
         order_id, created_at = await db.create_order(
             user_id=user.id,
+            source=source,
             username=user.username,
             full_name=user.full_name,
             bot_type=labels["bot_type_label"],
@@ -466,7 +468,9 @@ async def submit_order(
     await callback.answer()
     logger.info("Заявка %s создана (user_id=%s)", order_id, user.id)
 
-    card = texts.admin_card(order_id, labels, utils.user_line(user), db.to_local(created_at))
+    card = texts.admin_card(
+        order_id, labels, utils.user_line(user), db.to_local(created_at), source
+    )
     delivered = await notify_admins(bot, config, card, admin_kb.order_actions(order_id))
     if not delivered:
         logger.error("Заявка %s сохранена, но админ не уведомлён", order_id)

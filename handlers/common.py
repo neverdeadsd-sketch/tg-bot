@@ -5,7 +5,7 @@ import logging
 
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
-from aiogram.filters import Command, CommandStart, StateFilter
+from aiogram.filters import Command, CommandObject, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, FSInputFile, Message
@@ -76,15 +76,24 @@ async def _reset_anchor(bot: Bot, state: FSMContext, chat_id: int) -> None:
 # Команды
 # --------------------------------------------------------------------------
 @system_router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext, bot: Bot) -> None:
+async def cmd_start(
+    message: Message, state: FSMContext, bot: Bot, command: CommandObject
+) -> None:
+    user = message.from_user
+    # Метка из ссылки вида t.me/бот?start=avito — так видно, какой канал работает
+    source = db.clean_source(command.args)
+    await db.remember_user(
+        user_id=user.id, username=user.username, full_name=user.full_name, source=source
+    )
+
     await _reset_anchor(bot, state, message.chat.id)
     await state.clear()
     await _send_welcome_image(bot, message.chat.id)
     sent = await message.answer(
-        texts.greeting(message.from_user.first_name or "друг"), reply_markup=kb.main_menu()
+        texts.greeting(user.first_name or "друг"), reply_markup=kb.main_menu()
     )
     await utils.set_anchor(state, sent.message_id)
-    logger.info("/start от user_id=%s", message.from_user.id)
+    logger.info("/start от user_id=%s, источник=%s", user.id, source or "—")
 
 
 @system_router.message(Command("cancel"))

@@ -84,7 +84,8 @@ async def notify_user(bot: Bot, user_id: int, text: str) -> None:
 async def cmd_stats(message: Message) -> None:
     data = await db.get_stats()
     await message.answer(
-        texts.stats(data["day"], data["week"], data["total"], data["by_status"])
+        texts.stats(data["day"], data["week"], data["total"],
+                    data["by_status"], data["by_source"])
     )
 
 

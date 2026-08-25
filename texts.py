@@ -74,6 +74,13 @@ STEP_TITLES: dict[str, str] = {
     "contact": "Контакт",
 }
 
+SOURCE_DIRECT = "прямой заход"
+
+
+def source_label(source: str | None) -> str:
+    return source or SOURCE_DIRECT
+
+
 STATUS_LABELS: dict[str, str] = {
     "new": "🆕 новая",
     "in_work": "🔧 в работе",
@@ -215,11 +222,12 @@ def order_created(order_id: int) -> str:
     )
 
 
-def admin_card(order_id: int, answers: dict, user_line: str, created_at: str) -> str:
+def admin_card(order_id: int, answers: dict, user_line: str, created_at: str,
+               source: str | None = None) -> str:
     description = answers.get("description") or "—"
     return (
         f"🆕 <b>Заявка №{order_id}</b>\n"
-        f"<i>{escape(created_at)}</i>\n\n"
+        f"<i>{escape(created_at)} · {escape(source_label(source))}</i>\n\n"
         f"<b>От:</b> {user_line}\n"
         f"<b>Контакт:</b> {escape(answers.get('contact', '—'))}\n\n"
         f"<b>Тип:</b> {escape(answers.get('bot_type_label', '—'))}\n"
@@ -288,7 +296,8 @@ def limit_reached(limit: int) -> str:
 ADMIN_ONLY = "Команда только для администратора."
 
 
-def stats(day: int, week: int, total: int, by_status: dict[str, int]) -> str:
+def stats(day: int, week: int, total: int, by_status: dict[str, int],
+          by_source: list[tuple[str | None, int]] | None = None) -> str:
     lines = [
         "<b>📊 Статистика заявок</b>\n",
         f"За 24 часа: <b>{day}</b>",
@@ -298,6 +307,10 @@ def stats(day: int, week: int, total: int, by_status: dict[str, int]) -> str:
     ]
     for status, title in STATUS_LABELS.items():
         lines.append(f"{title}: {by_status.get(status, 0)}")
+    if by_source:
+        lines.append("\n<b>По источникам</b>")
+        for source, count in by_source:
+            lines.append(f"{escape(source_label(source))}: <b>{count}</b>")
     return "\n".join(lines)
 
 
@@ -320,7 +333,8 @@ def orders_page(rows: list[dict], page: int, pages: int, total: int) -> str:
 def order_card(row: dict) -> str:
     return (
         f"<b>Заявка №{row['id']}</b> · {STATUS_LABELS.get(row['status'], row['status'])}\n"
-        f"<i>{escape(row['created_at_local'])}</i>\n\n"
+        f"<i>{escape(row['created_at_local'])} · "
+        f"{escape(source_label(row.get('source')))}</i>\n\n"
         f"<b>От:</b> {escape(row['full_name'] or '—')} "
         f"{('@' + row['username']) if row['username'] else ''} "
         f"(<code>{row['user_id']}</code>)\n"
