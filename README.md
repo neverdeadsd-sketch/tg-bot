@@ -62,9 +62,10 @@ keyboards/
 middlewares/
   throttling.py      антифлуд по user_id
 assets/
-  make_assets.py     генерация аватаров и баннера (нужен Pillow)
+  make_assets.py     генерация аватаров и баннеров (нужен Pillow)
+  fonts/             Inter Display (SIL OFL) для генерации
   avatar_*.png       аватары 512x512 под круглую обрезку
-  welcome.png        баннер, который бот шлёт на /start
+  welcome*.png       баннер, который бот шлёт на /start
 deploy/
   install.sh         установка на VPS одной командой
   tg-bot.service     unit-файл systemd
