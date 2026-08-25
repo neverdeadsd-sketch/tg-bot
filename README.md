@@ -61,6 +61,10 @@ keyboards/
   admin.py           действия по заявке и пагинация
 middlewares/
   throttling.py      антифлуд по user_id
+deploy/
+  install.sh         установка на VPS одной командой
+  tg-bot.service     unit-файл systemd
+BRANDING.md          тексты профиля бота для BotFather
 ```
 
 Тексты и списки вариантов правятся **только в `texts.py`** — коды вариантов
@@ -115,6 +119,25 @@ python main.py
 
 ## Деплой на VPS через systemd
 
+### Быстрый путь — одной командой
+
+На чистом Ubuntu/Debian достаточно скрипта из репозитория: он ставит зависимости,
+создаёт пользователя `botuser`, разворачивает venv и регистрирует systemd-сервис.
+Повторный запуск обновляет код и перезапускает бота.
+
+```bash
+sudo apt update && sudo apt install -y git
+git clone -b claude/telegram-chatbot-request-bot-ng1lsi https://github.com/neverdeadsd-sketch/tg-bot.git /tmp/tg-bot
+sudo bash /tmp/tg-bot/deploy/install.sh
+sudo nano /opt/tg-bot/.env        # BOT_TOKEN и ADMIN_ID
+sudo systemctl restart tg-bot
+journalctl -u tg-bot -f
+```
+
+Оформление профиля бота (имя, описание, аватар, приватность) — в [`BRANDING.md`](BRANDING.md).
+
+### Тот же путь вручную, по шагам
+
 Дальше — Ubuntu/Debian, бот работает от отдельного пользователя `botuser`.
 
 ### 1. Пользователь и код
@@ -139,7 +162,9 @@ sudo chmod 600 /opt/tg-bot/.env             # токен не должен чи�
 
 ### 3. Unit-файл
 
-`sudo nano /etc/systemd/system/tg-bot.service`
+Готовый файл лежит в репозитории: `deploy/tg-bot.service`. Скопировать вручную —
+`sudo cp /opt/tg-bot/deploy/tg-bot.service /etc/systemd/system/`, либо создать
+через `sudo nano /etc/systemd/system/tg-bot.service` с таким содержимым:
 
 ```ini
 [Unit]
