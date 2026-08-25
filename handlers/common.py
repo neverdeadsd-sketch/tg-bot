@@ -8,13 +8,13 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, FSInputFile, Message
 
 import db
 import texts
 import utils
 from callbacks import MenuCB, OrderCB
-from config import Config
+from config import BASE_DIR, Config
 from handlers.admin import notify_admins
 from keyboards import common as kb
 
@@ -28,6 +28,36 @@ router = Router(name="common")
 
 class QuestionForm(StatesGroup):
     waiting = State()
+
+
+WELCOME_IMAGE = BASE_DIR / "assets" / "welcome.png"
+# file_id первой удачной отправки: Telegram отдаёт картинку по нему сам,
+# файл больше не заливается при каждом /start.
+_welcome_file_id: str | None = None
+
+
+async def _send_welcome_image(bot: Bot, chat_id: int) -> None:
+    """Приветственный баннер. Нет файла или не отправился — просто пропускаем."""
+    global _welcome_file_id
+
+    if _welcome_file_id:
+        try:
+            await bot.send_photo(chat_id, _welcome_file_id)
+            return
+        except TelegramAPIError as error:
+            logger.debug("file_id баннера устарел: %s", error)
+            _welcome_file_id = None
+
+    if not WELCOME_IMAGE.exists():
+        logger.debug("Баннер не найден: %s", WELCOME_IMAGE)
+        return
+    try:
+        message = await bot.send_photo(chat_id, FSInputFile(WELCOME_IMAGE))
+    except TelegramAPIError:
+        logger.warning("Не удалось отправить баннер", exc_info=True)
+        return
+    if message.photo:
+        _welcome_file_id = message.photo[-1].file_id
 
 
 async def _reset_anchor(bot: Bot, state: FSMContext, chat_id: int) -> None:
@@ -49,6 +79,7 @@ async def _reset_anchor(bot: Bot, state: FSMContext, chat_id: int) -> None:
 async def cmd_start(message: Message, state: FSMContext, bot: Bot) -> None:
     await _reset_anchor(bot, state, message.chat.id)
     await state.clear()
+    await _send_welcome_image(bot, message.chat.id)
     sent = await message.answer(
         texts.greeting(message.from_user.first_name or "друг"), reply_markup=kb.main_menu()
     )

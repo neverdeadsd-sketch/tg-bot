@@ -61,6 +61,10 @@ keyboards/
   admin.py           действия по заявке и пагинация
 middlewares/
   throttling.py      антифлуд по user_id
+assets/
+  make_assets.py     генерация аватаров и баннера (нужен Pillow)
+  avatar_*.png       аватары 512x512 под круглую обрезку
+  welcome.png        баннер, который бот шлёт на /start
 deploy/
   install.sh         установка на VPS одной командой
   tg-bot.service     unit-файл systemd
