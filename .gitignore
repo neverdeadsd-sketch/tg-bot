@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+data/
+*.db
+*.db-wal
+*.db-shm
+*.csv
+assets/voice_parts/
+assets/voice.wav
+assets/reels_brief_voiced.mp4

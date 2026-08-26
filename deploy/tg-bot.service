@@ -1,0 +1,41 @@
+[Unit]
+Description=Telegram bot: приём заявок на разработку чат-ботов
+Documentation=https://github.com/neverdeadsd-sketch/tg-bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=botuser
+Group=botuser
+WorkingDirectory=/opt/tg-bot
+ExecStart=/opt/tg-bot/.venv/bin/python /opt/tg-bot/main.py
+
+# Перезапуск при падении и после потери сети
+Restart=always
+RestartSec=5
+# Неверный BOT_TOKEN или битый .env перезапуском не лечится: не мельтешим,
+# а останавливаемся с понятной ошибкой в журнале.
+RestartPreventExitStatus=78
+KillSignal=SIGTERM
+TimeoutStopSec=20
+
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=Europe/Moscow
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=tg-bot
+
+# Минимальные привилегии: боту нужен только каталог с базой
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/opt/tg-bot/data
+
+[Install]
+WantedBy=multi-user.target
