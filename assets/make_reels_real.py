@@ -37,17 +37,23 @@ CROP_CHAT = "crop=572:1016:542:24"
 # (файл реплики, что показываем, диапазон в записи, подпись на экране)
 SEGMENTS = [
     ("01.wav", "card", ASSETS / "reels_hook.png", None),
-    ("02.wav", "chat", (0.35, 2.15), "Клиент открывает бота"),
-    ("03.wav", "chat", (2.15, 4.15), "7 шагов — и почти везде кнопки"),
-    ("04.wav", "chat", (4.15, 7.45), "Нужные функции — галочками"),
-    ("05.wav", "chat", (7.45, 9.65), "Бюджет и срок — диапазонами"),
-    ("06.wav", "chat", (9.65, 10.60), "Печатать почти ничего не нужно"),
+    ("02.wav", "chat", (0.30, 2.60), "Клиент открывает бота"),
+    ("03.wav", "chat", (2.60, 6.50), "7 шагов — и почти везде кнопки"),
+    ("04.wav", "chat", (6.50, 15.80), "Нужные функции — галочками"),
+    ("05.wav", "chat", (15.80, 23.10), "Бюджет и срок — диапазонами"),
+    ("06.wav", "chat", (23.10, 28.40), "Описание можно пропустить"),
+    ("07.wav", "chat", (28.40, 30.80), "Сводка: всё видно и можно поправить"),
+    ("08.wav", "chat", (30.80, 35.85), "Заявка отправлена, номер у клиента"),
     ("09.wav", "card", ASSETS / "reels_cta.png", None),
 ]
 
+# Ускорять кадры можно, но не сильнее чем в два с небольшим раза: дальше
+# клики сливаются в мельтешение. Что не влезло — просто не показываем.
+MIN_FACTOR = 0.45
+
 FONT = str(ASSETS / "fonts" / "InterDisplay-SemiBold.ttf")
 CAPTION_SIZE = 52
-CAPTION_BOTTOM = 1640          # верх плашки: ниже кнопок, но выше поля ввода
+CAPTION_TOP = 210              # подписи вверху: внизу всегда активный экран бота
 
 
 def ffmpeg() -> str:
@@ -77,7 +83,7 @@ def caption_layer(text: str, target: Path) -> None:
     box_height = line_height * len(lines) + 44
     widest = max(draw.textlength(line, font=font) for line in lines)
     box_width = int(widest) + 76
-    x0, y0 = (W - box_width) // 2, CAPTION_BOTTOM
+    x0, y0 = (W - box_width) // 2, CAPTION_TOP
     draw.rounded_rectangle([x0, y0, x0 + box_width, y0 + box_height],
                            radius=26, fill=(8, 12, 18, 205))
 
@@ -106,8 +112,8 @@ def encode_clip(source: Path, start: float, end: float, seconds: float,
                 target: Path, crop: str, caption: Path | None) -> None:
     """Кусок записи, растянутый под длительность реплики, с подписью поверх."""
     factor = seconds / (end - start)
-    if factor < 1.0:                      # ускорять не станем — просто возьмём короче
-        end, factor = start + seconds, 1.0
+    if factor < MIN_FACTOR:               # слишком длинный кусок — берём его хвост
+        start, factor = end - seconds / MIN_FACTOR, MIN_FACTOR
 
     chain = f"{crop},scale={W}:{H}:flags=lanczos,setpts={factor:.4f}*PTS,fps={FPS}"
     command = [ffmpeg(), "-y", "-loglevel", "error",
