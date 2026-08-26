@@ -13,19 +13,36 @@ $ErrorActionPreference = "Stop"
 [Windows.Media.SpeechSynthesis.SpeechSynthesizer, Windows.Media, ContentType = WindowsRuntime] | Out-Null
 [Windows.Storage.Streams.DataReader, Windows.Storage.Streams, ContentType = WindowsRuntime] | Out-Null
 
-# PowerShell 5.1 не умеет await для WinRT. Расширения из
-# System.Runtime.WindowsRuntime есть не в каждой сборке, поэтому просто
-# опрашиваем статус операции: 0 - выполняется, 1 - готово, дальше ошибка.
-function Wait-Async($operation) {
-    $deadline = (Get-Date).AddSeconds(60)
-    while ($operation.Status -eq 0) {
-        if ((Get-Date) -gt $deadline) { throw "Синтезатор не ответил за 60 секунд" }
-        Start-Sleep -Milliseconds 20
+# PowerShell 5.1 не умеет await для WinRT, а проекция асинхронных операций
+# ведёт себя по-разному от сборки к сборке: где-то нет расширений AsTask,
+# где-то не читается Status. Поэтому сначала пробуем штатный путь через
+# задачи .NET, а если его нет — просто дёргаем результат, пока не отдадут.
+$script:AsTask = $null
+try {
+    Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction Stop
+    $extensions = [Type]::GetType("System.WindowsRuntimeSystemExtensions, System.Runtime.WindowsRuntime")
+    if ($extensions) {
+        $script:AsTask = $extensions.GetMethods() | Where-Object {
+            $_.Name -eq "AsTask" -and $_.GetParameters().Count -eq 1 -and
+            $_.GetParameters()[0].ParameterType.Name -eq "IAsyncOperation`1"
+        } | Select-Object -First 1
     }
-    if ($operation.Status -ne 1) {
-        throw "Синтез вернул статус $($operation.Status) (2 - отменён, 3 - ошибка)"
+} catch {
+    # штатного пути нет — работаем запасным
+}
+
+function Wait-Async($operation, $resultType) {
+    if ($script:AsTask -and $resultType) {
+        $task = $script:AsTask.MakeGenericMethod($resultType).Invoke($null, @($operation))
+        if (-not $task.Wait(60000)) { throw "Синтезатор не ответил за 60 секунд" }
+        return $task.Result
     }
-    $operation.GetResults()
+    $lastError = $null
+    for ($attempt = 0; $attempt -lt 600; $attempt++) {
+        try { return $operation.GetResults() } catch { $lastError = $_ }
+        Start-Sleep -Milliseconds 100
+    }
+    throw "Синтезатор не отдал результат за 60 секунд. Последняя ошибка: $lastError"
 }
 
 $voices = [Windows.Media.SpeechSynthesis.SpeechSynthesizer]::AllVoices
@@ -70,10 +87,10 @@ $synth.Options.SpeakingRate = $Rate
 for ($i = 0; $i -lt $lines.Count; $i++) {
     $path = Join-Path $dir ("{0:d2}.wav" -f ($i + 1))
 
-    $stream = Wait-Async $synth.SynthesizeTextToStreamAsync($lines[$i])
+    $stream = Wait-Async $synth.SynthesizeTextToStreamAsync($lines[$i]) ([Windows.Media.SpeechSynthesis.SpeechSynthesisStream])
     $size = [uint32]$stream.Size
     $reader = New-Object Windows.Storage.Streams.DataReader($stream.GetInputStreamAt(0))
-    Wait-Async $reader.LoadAsync($size) | Out-Null
+    Wait-Async $reader.LoadAsync($size) ([uint32]) | Out-Null
     $bytes = New-Object byte[] $size
     $reader.ReadBytes($bytes)
     $reader.Dispose()
