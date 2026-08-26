@@ -33,25 +33,61 @@ TAIL = 0.30            # тишина после реплики, чтобы ка
 # панель задач начинается на y=1048. Резать «на глаз» нельзя — срезает
 # аватарки бота и левый край шапки.
 CROP_CHAT = "crop=572:1016:542:24"
-CROP_CARD = "crop=500:889:545:35"      # укрупнение на карточке заявки
 
-# (файл реплики, что показываем, диапазон в записи)
+# (файл реплики, что показываем, диапазон в записи, подпись на экране)
 SEGMENTS = [
-    ("01.wav", "card", ASSETS / "reels_hook.png"),
-    ("02.wav", "chat", (0.35, 2.15)),      # приветствие и меню
-    ("03.wav", "chat", (2.15, 4.15)),      # шаги 1 и 2
-    ("04.wav", "chat", (4.15, 7.45)),      # функции с галочками
-    ("05.wav", "chat", (7.45, 9.65)),      # бюджет и срок
-    ("06.wav", "chat", (9.65, 10.60)),     # описание, кнопки «пропустить» и «назад»
-    ("08.wav", "card", None),              # карточка заявки крупно — подставится ниже
-    ("09.wav", "card", ASSETS / "reels_cta.png"),
+    ("01.wav", "card", ASSETS / "reels_hook.png", None),
+    ("02.wav", "chat", (0.35, 2.15), "Клиент открывает бота"),
+    ("03.wav", "chat", (2.15, 4.15), "7 шагов — и почти везде кнопки"),
+    ("04.wav", "chat", (4.15, 7.45), "Нужные функции — галочками"),
+    ("05.wav", "chat", (7.45, 9.65), "Бюджет и срок — диапазонами"),
+    ("06.wav", "chat", (9.65, 10.60), "Печатать почти ничего не нужно"),
+    ("09.wav", "card", ASSETS / "reels_cta.png", None),
 ]
-CARD_MOMENT = 1.00                        # кадр, с которого берём укрупнение карточки
+
+FONT = str(ASSETS / "fonts" / "InterDisplay-SemiBold.ttf")
+CAPTION_SIZE = 52
+CAPTION_BOTTOM = 1640          # верх плашки: ниже кнопок, но выше поля ввода
 
 
 def ffmpeg() -> str:
     import imageio_ffmpeg
     return imageio_ffmpeg.get_ffmpeg_exe()
+
+
+def caption_layer(text: str, target: Path) -> None:
+    """Подпись на прозрачном слое: ffmpeg в этой сборке не умеет drawtext."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    font = ImageFont.truetype(FONT, CAPTION_SIZE)
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+
+    words, lines, current = text.split(" "), [], ""
+    for word in words:
+        probe = f"{current} {word}".strip()
+        if draw.textlength(probe, font=font) <= W - 220 or not current:
+            current = probe
+        else:
+            lines.append(current)
+            current = word
+    lines.append(current)
+
+    line_height = CAPTION_SIZE + 16
+    box_height = line_height * len(lines) + 44
+    widest = max(draw.textlength(line, font=font) for line in lines)
+    box_width = int(widest) + 76
+    x0, y0 = (W - box_width) // 2, CAPTION_BOTTOM
+    draw.rounded_rectangle([x0, y0, x0 + box_width, y0 + box_height],
+                           radius=26, fill=(8, 12, 18, 205))
+
+    y = y0 + 22
+    for line in lines:
+        width = draw.textlength(line, font=font)
+        draw.text(((W - width) / 2, y), line, font=font, fill=(255, 255, 255, 255))
+        y += line_height
+
+    layer.save(target)
 
 
 def run(command: list[str]) -> None:
@@ -67,32 +103,22 @@ def encode_still(image: Path, seconds: float, target: Path) -> None:
 
 
 def encode_clip(source: Path, start: float, end: float, seconds: float,
-                target: Path, crop: str) -> None:
-    """Кусок записи, растянутый под длительность реплики."""
+                target: Path, crop: str, caption: Path | None) -> None:
+    """Кусок записи, растянутый под длительность реплики, с подписью поверх."""
     factor = seconds / (end - start)
     if factor < 1.0:                      # ускорять не станем — просто возьмём короче
         end, factor = start + seconds, 1.0
 
-    chain = [crop, f"scale={W}:{H}:flags=lanczos",
-             f"setpts={factor:.4f}*PTS", f"fps={FPS}", "format=yuv420p"]
-    run([ffmpeg(), "-y", "-loglevel", "error", "-ss", f"{start:.3f}", "-to", f"{end:.3f}",
-         "-i", str(source), "-an", "-vf", ",".join(chain),
-         "-c:v", "libx264", "-preset", "medium", "-crf", "20", str(target)])
-
-
-def encode_zoom(source: Path, moment: float, seconds: float, target: Path,
-                crop: str, workdir: Path) -> None:
-    """Медленный наезд на один кадр: живее статики и считается быстро."""
-    still = workdir / f"{target.stem}_still.png"
-    run([ffmpeg(), "-y", "-loglevel", "error", "-ss", f"{moment:.3f}", "-i", str(source),
-         "-frames:v", "1", "-vf", f"{crop},scale={W}:{H}:flags=lanczos", str(still)])
-
-    frames = max(2, int(seconds * FPS))
-    run([ffmpeg(), "-y", "-loglevel", "error", "-loop", "1", "-i", str(still),
-         "-t", f"{seconds:.3f}",
-         "-vf", f"zoompan=z=\'min(1+0.00045*on,1.10)\':d={frames}:x=\'iw/2-(iw/zoom/2)\':"
-                f"y=\'ih/2-(ih/zoom/2)\':s={W}x{H}:fps={FPS},format=yuv420p",
-         "-c:v", "libx264", "-preset", "medium", "-crf", "20", str(target)])
+    chain = f"{crop},scale={W}:{H}:flags=lanczos,setpts={factor:.4f}*PTS,fps={FPS}"
+    command = [ffmpeg(), "-y", "-loglevel", "error",
+               "-ss", f"{start:.3f}", "-to", f"{end:.3f}", "-i", str(source)]
+    if caption:
+        command += ["-i", str(caption), "-filter_complex",
+                    f"[0:v]{chain}[v];[v][1:v]overlay=0:0,format=yuv420p"]
+    else:
+        command += ["-vf", f"{chain},format=yuv420p"]
+    command += ["-an", "-c:v", "libx264", "-preset", "medium", "-crf", "20", str(target)]
+    run(command)
 
 
 def build_track(starts: list[float], names: list[str], total: float, path: Path) -> None:
@@ -135,18 +161,20 @@ def main() -> None:
     workdir = Path(work.name)
 
     starts, names, pieces, cursor = [], [], [], 0.0
-    for index, (part, kind, payload) in enumerate(SEGMENTS):
+    for index, (part, kind, payload, text) in enumerate(SEGMENTS):
         seconds = audio_tools.duration(PARTS / part) + TAIL
         piece = workdir / f"{index:02d}.mp4"
 
-        if kind == "card" and payload is not None:
+        if kind == "card":
             encode_still(payload, seconds, piece)
-        elif kind == "card":
-            encode_zoom(source, CARD_MOMENT, seconds, piece, CROP_CARD, workdir)
         else:
-            encode_clip(source, payload[0], payload[1], seconds, piece, CROP_CHAT)
+            caption = None
+            if text:
+                caption = workdir / f"{index:02d}_caption.png"
+                caption_layer(text, caption)
+            encode_clip(source, payload[0], payload[1], seconds, piece, CROP_CHAT, caption)
 
-        print(f"  {part}  {seconds:4.1f} с  старт {cursor:5.1f} с  {kind}")
+        print(f"  {part}  {seconds:4.1f} с  старт {cursor:5.1f} с  {text or 'титр'}")
         starts.append(cursor)
         names.append(part)
         pieces.append(piece)
