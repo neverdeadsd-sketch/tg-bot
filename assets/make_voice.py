@@ -3,7 +3,7 @@
 Каждая фраза синтезируется отдельно и ставится ровно на свою секунду —
 дорожка сразу совпадает с видео, подгонять в монтаже ничего не нужно.
 
-    pip install torch soundfile numpy
+    pip install torch
     python assets/make_voice.py
 
 Первый запуск скачает модель (~100 МБ). Голоса: aidar (спокойный мужской),
@@ -11,10 +11,11 @@ eugene (мягче), также есть baya, kseniya, xenia — женские
 """
 from __future__ import annotations
 
+import array
+import sys
+import wave
 from pathlib import Path
 
-import numpy as np
-import soundfile as sf
 import torch
 
 ASSETS = Path(__file__).resolve().parent
@@ -40,7 +41,20 @@ LINES: list[tuple[float, str]] = [
 ]
 
 
+def write_wav(path: Path, samples, sample_rate: int) -> None:
+    """Пишем WAV стандартной библиотекой: ни soundfile, ни numpy не нужны."""
+    frames = array.array("h", samples)   # int16 little-endian на всех обычных платформах
+    if sys.byteorder == "big":
+        frames.byteswap()
+    with wave.open(str(path), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(sample_rate)
+        handle.writeframes(frames.tobytes())
+
+
 def main() -> None:
+    print(f"Python: {sys.executable}")
     torch.set_num_threads(4)
     print("Загружаю модель Silero…")
     model, _ = torch.hub.load(
@@ -49,13 +63,13 @@ def main() -> None:
     )
     model.to(torch.device("cpu"))
 
-    pieces: list[tuple[float, np.ndarray]] = []
+    pieces: list[tuple[float, torch.Tensor]] = []
     cursor = 0.0
     for planned, text in LINES:
         audio = model.apply_tts(text=text, speaker=SPEAKER, sample_rate=SAMPLE_RATE,
-                                put_accent=True, put_yo=True).numpy()
+                                put_accent=True, put_yo=True).float()
         start = max(planned, cursor)
-        length = len(audio) / SAMPLE_RATE
+        length = audio.numel() / SAMPLE_RATE
         if start > planned + 0.01:
             print(f"  ! фраза сдвинута на {start - planned:.2f} с — предыдущая длиннее слота")
         print(f"  {start:5.1f} с  {length:4.1f} с  {text[:46]}…")
@@ -63,14 +77,14 @@ def main() -> None:
         cursor = start + length + GAP
 
     total = max(TOTAL_SECONDS, cursor)
-    track = np.zeros(int(total * SAMPLE_RATE), dtype=np.float32)
+    track = torch.zeros(int(total * SAMPLE_RATE))
     for start, audio in pieces:
         offset = int(start * SAMPLE_RATE)
-        track[offset:offset + len(audio)] += audio.astype(np.float32)
+        track[offset:offset + audio.numel()] += audio
 
-    peak = float(np.max(np.abs(track))) or 1.0
+    peak = float(track.abs().max()) or 1.0
     track = (track / peak) * 0.89          # нормализация с запасом от клиппинга
-    sf.write(OUT, track, SAMPLE_RATE)
+    write_wav(OUT, (track * 32767).to(torch.int16).tolist(), SAMPLE_RATE)
     print(f"\nГотово: {OUT}  {total:.1f} с")
     print("Положите файл в репозиторий и запушьте — сведу дорожку с видео.")
 
