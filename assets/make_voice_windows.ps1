@@ -1,4 +1,4 @@
-﻿param([string]$Voice = "", [int]$Rate = -1)
+﻿param([string]$Voice = "", [int]$Rate = 0)
 
 # Озвучка ролика встроенным синтезатором Windows (System.Speech).
 # Без запуска с -Voice просто показывает список установленных голосов.
@@ -20,6 +20,8 @@ if (-not $Voice) {
     Write-Host "`nНужен русский мужской. Запустите снова, например:"
     Write-Host "  .\assets\make_voice_windows.ps1 -Voice 'Microsoft Pavel'"
     Write-Host "`nЕсли русских голосов нет: Параметры - Время и язык - Речь - Добавить голоса - Русский."
+    Write-Host "`nСистема может знать больше голосов, чем видит этот интерфейс. Проверить:"
+    Write-Host "  Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens' | ForEach-Object { (Get-ItemProperty `$_.PSPath).'(default)' }"
     exit
 }
 
@@ -38,8 +40,16 @@ $lines = @(
 $dir = Join-Path $PSScriptRoot "voice_parts"
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 
+$installed = $synth.GetInstalledVoices() | ForEach-Object { $_.VoiceInfo.Name }
+if ($installed -notcontains $Voice) {
+    Write-Host "Голос '$Voice' не установлен. Доступны:`n"
+    $installed | ForEach-Object { Write-Host "  $_" }
+    Write-Host "`nЗапись отменена — иначе фразы наговорит голос по умолчанию."
+    exit 1
+}
+
 $synth.SelectVoice($Voice)
-$synth.Rate = $Rate          # -1 чуть медленнее обычного: так спокойнее
+$synth.Rate = $Rate          # 0 — обычный темп, +1 быстрее, -1 медленнее
 
 for ($i = 0; $i -lt $lines.Count; $i++) {
     $path = Join-Path $dir ("{0:d2}.wav" -f ($i + 1))

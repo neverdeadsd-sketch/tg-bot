@@ -8,8 +8,10 @@
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import unicodedata
+import wave
 from pathlib import Path
 
 import imageio_ffmpeg
@@ -347,6 +349,57 @@ TIMELINE = [
 ]
 
 CARD_IN, CARD_OUT = ASSETS / "reels_hook.png", ASSETS / "reels_cta.png"
+VOICE_PARTS = ASSETS / "voice_parts"
+VOICE_PLAN = ASSETS / "voice_plan.json"
+
+INTRO_SECONDS, OUTRO_SECONDS = 2.4, 4.0
+TRANSITION_FRAMES = 7
+TAIL = 0.35        # запас тишины после реплики, чтобы сцена не обрывалась на слове
+
+# Какие сцены озвучивает каждая реплика. Индексы: 0 — вступительный титр,
+# 1..13 — сцены TIMELINE по порядку, 14 — финальный титр.
+PHRASE_GROUPS = [[0], [1], [2, 3], [4, 5, 6], [7, 8], [9, 10], [11], [12, 13], [14]]
+
+
+def part_durations() -> list[float]:
+    """Длительности наговорённых фраз, если они уже записаны."""
+    if not VOICE_PARTS.is_dir():
+        return []
+    durations = []
+    for path in sorted(VOICE_PARTS.glob("*.wav")):
+        with wave.open(str(path), "rb") as handle:
+            durations.append(handle.getnframes() / handle.getframerate())
+    return durations
+
+
+def plan() -> tuple[list[float], list[float], float]:
+    """Длительности сцен, время начала каждой и общая длина.
+
+    Если фразы записаны, сцены растягиваются под них: подгонять голос под
+    картинку бессмысленно, а картинку под голос — бесплатно.
+    """
+    base = [INTRO_SECONDS] + [seconds for _, seconds, _, _ in TIMELINE] + [OUTRO_SECONDS]
+    spoken = part_durations()
+
+    if len(spoken) == len(PHRASE_GROUPS):
+        for group, duration in zip(PHRASE_GROUPS, spoken):
+            have = sum(base[index] for index in group)
+            have += TRANSITION_FRAMES / FPS * (len(group) - 1)
+            need = duration + TAIL
+            if need > have:
+                factor = need / have
+                for index in group:
+                    base[index] *= factor
+    elif spoken:
+        print(f"! фраз {len(spoken)}, а групп {len(PHRASE_GROUPS)} — тайминги оставляю базовыми")
+
+    starts, cursor = [], 0.0
+    for index, seconds in enumerate(base):
+        starts.append(cursor)
+        cursor += seconds
+        if 1 <= index <= len(TIMELINE) - 1:      # переход между соседними сценами
+            cursor += TRANSITION_FRAMES / FPS
+    return base, starts, cursor
 
 
 # --- Анимация --------------------------------------------------------------
@@ -384,11 +437,11 @@ def card_frames(path: Path, seconds: float, zoom_from: float = 1.0, zoom_to: flo
         yield frame
 
 
-def build_frames():
-    yield from card_frames(CARD_IN, 2.4)
+def build_frames(base: list[float]):
+    yield from card_frames(CARD_IN, base[0])
 
     rendered = []
-    for state, seconds, tap, caption in TIMELINE:
+    for (state, _, tap, caption), seconds in zip(TIMELINE, base[1:]):
         image, boxes = render_state(state)
         rendered.append((image, boxes, seconds, tap, caption))
 
@@ -417,10 +470,20 @@ def build_frames():
             for step in range(7):
                 yield Image.blend(captioned, next_captioned, ease((step + 1) / 8))
 
-    yield from card_frames(CARD_OUT, 4.0)
+    yield from card_frames(CARD_OUT, base[-1])
 
 
 def main() -> None:
+    base, starts, total = plan()
+    phrase_starts = [round(starts[group[0]], 3) for group in PHRASE_GROUPS]
+    VOICE_PLAN.write_text(
+        json.dumps({"phrases": phrase_starts, "total": round(total, 3)},
+                   ensure_ascii=False, indent=2), encoding="utf-8")
+    if part_durations():
+        print("Подгоняю сцены под записанные фразы:")
+        for index, start in enumerate(phrase_starts, 1):
+            print(f"  фраза {index}: старт {start:5.1f} с")
+
     exe = imageio_ffmpeg.get_ffmpeg_exe()
     command = [
         exe, "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
@@ -430,7 +493,7 @@ def main() -> None:
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
                                stderr=subprocess.PIPE)
     count = 0
-    for frame in build_frames():
+    for frame in build_frames(base):
         process.stdin.write(frame.tobytes())
         count += 1
     process.stdin.close()

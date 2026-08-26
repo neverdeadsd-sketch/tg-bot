@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import array
+import json
 import sys
 import wave
 from pathlib import Path
@@ -15,12 +16,23 @@ from pathlib import Path
 ASSETS = Path(__file__).resolve().parent
 PARTS = ASSETS / "voice_parts"
 OUT = ASSETS / "voice.wav"
+PLAN = ASSETS / "voice_plan.json"
 
 GAP = 0.15               # пауза, если фраза не влезла в свой слот
-TOTAL_SECONDS = 34.5     # длительность ролика
 
-# Секунды начала фраз — совпадают со сценами в make_reels.py
-STARTS = [0.0, 2.4, 5.0, 9.5, 13.9, 17.7, 21.8, 25.0, 30.5]
+# Запасные тайминги, если ролик ещё не пересобран под записанные фразы.
+FALLBACK_STARTS = [0.0, 2.4, 5.0, 9.5, 13.9, 17.7, 21.8, 25.0, 30.5]
+FALLBACK_TOTAL = 34.5
+
+
+def load_plan() -> tuple[list[float], float]:
+    """make_reels.py кладёт сюда старты сцен после подгонки под фразы."""
+    if PLAN.exists():
+        data = json.loads(PLAN.read_text(encoding="utf-8"))
+        return data["phrases"], float(data["total"])
+    print("! voice_plan.json не найден — беру базовые тайминги.")
+    print("  Сначала запустите make_reels.py, он подгонит сцены под ваши фразы.")
+    return FALLBACK_STARTS, FALLBACK_TOTAL
 
 
 def read_part(path: Path) -> tuple[array.array, int]:
@@ -43,8 +55,9 @@ def main() -> None:
     files = sorted(PARTS.glob("*.wav"))
     if not files:
         raise SystemExit(f"Нет файлов в {PARTS}. Сначала запустите make_voice_windows.ps1")
-    if len(files) != len(STARTS):
-        print(f"! файлов {len(files)}, а таймингов {len(STARTS)} — раскладываю по порядку")
+    starts, total_seconds = load_plan()
+    if len(files) != len(starts):
+        print(f"! файлов {len(files)}, а таймингов {len(starts)} — раскладываю по порядку")
 
     parts, rate = [], None
     for path in files:
@@ -57,7 +70,7 @@ def main() -> None:
 
     placed, cursor = [], 0.0
     for index, (name, samples) in enumerate(parts):
-        planned = STARTS[index] if index < len(STARTS) else cursor
+        planned = starts[index] if index < len(starts) else cursor
         start = max(planned, cursor)
         length = len(samples) / rate
         if start > planned + 0.01:
@@ -66,7 +79,7 @@ def main() -> None:
         placed.append((start, samples))
         cursor = start + length + GAP
 
-    total = max(TOTAL_SECONDS, cursor)
+    total = max(total_seconds, cursor)
     track = array.array("i", bytes(4 * int(total * rate)))   # 32 бита — запас на сложение
     for start, samples in placed:
         offset = int(start * rate)
