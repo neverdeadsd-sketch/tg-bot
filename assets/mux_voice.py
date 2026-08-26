@@ -48,7 +48,10 @@ def main() -> None:
         command += ["-filter_complex", f"[0:v]tpad=stop_mode=clone:stop_duration={voice_len - video_len:.2f}[v]",
                     "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "slow", "-crf", "20"]
     else:
-        command += ["-map", "0:v", "-map", "1:a", "-c:v", "copy", "-shortest"]
+        # добиваем звук тишиной до конца видео: иначе -shortest обрежет картинку
+        command += ["-filter_complex", "[1:a]apad[a]",
+                    "-map", "0:v", "-map", "[a]", "-c:v", "copy",
+                    "-t", f"{video_len:.2f}"]
     command += ["-c:a", "aac", "-b:a", "160k", "-pix_fmt", "yuv420p",
                 "-movflags", "+faststart", str(OUT)]
 
