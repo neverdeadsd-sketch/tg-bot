@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import unicodedata
-import wave
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import imageio_ffmpeg
 from PIL import Image, ImageDraw, ImageFont
@@ -362,14 +364,9 @@ PHRASE_GROUPS = [[0], [1], [2, 3], [4, 5, 6], [7, 8], [9, 10], [11], [12, 13], [
 
 
 def part_durations() -> list[float]:
-    """Длительности наговорённых фраз, если они уже записаны."""
-    if not VOICE_PARTS.is_dir():
-        return []
-    durations = []
-    for path in sorted(VOICE_PARTS.glob("*.wav")):
-        with wave.open(str(path), "rb") as handle:
-            durations.append(handle.getnframes() / handle.getframerate())
-    return durations
+    """Длительности фраз после обрезки тишины — как они лягут в дорожку."""
+    import audio_tools
+    return [audio_tools.duration(path) for path in audio_tools.list_parts(VOICE_PARTS)]
 
 
 def plan() -> tuple[list[float], list[float], float]:

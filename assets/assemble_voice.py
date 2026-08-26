@@ -13,6 +13,9 @@ import sys
 import wave
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import audio_tools  # noqa: E402
+
 ASSETS = Path(__file__).resolve().parent
 PARTS = ASSETS / "voice_parts"
 OUT = ASSETS / "voice.wav"
@@ -35,33 +38,18 @@ def load_plan() -> tuple[list[float], float]:
     return FALLBACK_STARTS, FALLBACK_TOTAL
 
 
-def read_part(path: Path) -> tuple[array.array, int]:
-    with wave.open(str(path), "rb") as handle:
-        if handle.getsampwidth() != 2:
-            raise SystemExit(f"{path.name}: ожидается 16 бит на отсчёт")
-        rate, channels = handle.getframerate(), handle.getnchannels()
-        raw = handle.readframes(handle.getnframes())
-    samples = array.array("h")
-    samples.frombytes(raw)
-    if sys.byteorder == "big":
-        samples.byteswap()
-    if channels == 2:                     # сводим стерео в моно
-        samples = array.array("h", [(samples[i] + samples[i + 1]) // 2
-                                    for i in range(0, len(samples), 2)])
-    return samples, rate
-
-
 def main() -> None:
-    files = sorted(PARTS.glob("*.wav"))
+    files = audio_tools.list_parts(PARTS)
     if not files:
-        raise SystemExit(f"Нет файлов в {PARTS}. Сначала запустите make_voice_windows.ps1")
+        raise SystemExit(f"Нет аудиофайлов в {PARTS}.\n"
+                         f"Положите туда записи фраз: 01, 02, … 09 (wav, mp3 или m4a).")
     starts, total_seconds = load_plan()
     if len(files) != len(starts):
         print(f"! файлов {len(files)}, а таймингов {len(starts)} — раскладываю по порядку")
 
     parts, rate = [], None
     for path in files:
-        samples, part_rate = read_part(path)
+        samples, part_rate = audio_tools.load_part(path)
         if rate is None:
             rate = part_rate
         elif part_rate != rate:

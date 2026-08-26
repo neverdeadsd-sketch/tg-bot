@@ -13,6 +13,9 @@ import sys
 import wave
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import audio_tools  # noqa: E402
+
 ASSETS = Path(__file__).resolve().parent
 PARTS = ASSETS / "voice_parts"
 VOICE = ASSETS / "voice.wav"
@@ -20,18 +23,12 @@ SILENT = ASSETS / "reels_brief.mp4"
 VOICED = ASSETS / "reels_brief_voiced.mp4"
 
 
-def describe(path: Path) -> str:
-    """Длительность, частота и пиковая громкость WAV-файла."""
-    with wave.open(str(path), "rb") as handle:
-        rate, width, channels = handle.getframerate(), handle.getsampwidth(), handle.getnchannels()
-        frames = handle.getnframes()
-        raw = handle.readframes(frames)
-    if width != 2:
-        return f"{frames / rate:5.1f} с  {rate} Гц  {width * 8} бит — не 16 бит, читать не умею"
-    samples = array.array("h")
-    samples.frombytes(raw)
-    if sys.byteorder == "big":
-        samples.byteswap()
+def describe(path: Path, *, raw: bool = False) -> str:
+    """Длительность, частота и пиковая громкость. Любой формат, не только WAV."""
+    try:
+        samples, rate = audio_tools.load_part(path, trim=not raw, normalize=False)
+    except SystemExit as error:
+        return str(error).splitlines()[0]
     peak = max(abs(min(samples)), abs(max(samples))) if samples else 0
     level = peak / 32767
     if level < 0.01:
@@ -40,7 +37,7 @@ def describe(path: Path) -> str:
         verdict = f"очень тихо, пик {level * 100:.0f}%"
     else:
         verdict = f"пик {level * 100:.0f}%"
-    return f"{frames / rate / channels:5.1f} с  {rate} Гц  {verdict}"
+    return f"{len(samples) / rate:5.1f} с  {rate} Гц  {verdict}"
 
 
 def has_audio_stream(path: Path) -> str:
@@ -61,14 +58,14 @@ def has_audio_stream(path: Path) -> str:
 
 def main() -> None:
     print("1. Наговорённые фразы")
-    parts = sorted(PARTS.glob("*.wav")) if PARTS.is_dir() else []
+    parts = audio_tools.list_parts(PARTS)
     if not parts:
         print(f"   нет файлов в {PARTS} — сначала make_voice_windows.ps1")
     for path in parts:
-        print(f"   {path.name}  {describe(path)}")
+        print(f"   {path.name:12} {describe(path)}   (без тишины по краям)")
 
     print("\n2. Собранная дорожка")
-    print(f"   {VOICE.name}: {describe(VOICE) if VOICE.exists() else 'нет файла — запустите assemble_voice.py'}")
+    print(f"   {VOICE.name}: {describe(VOICE, raw=True) if VOICE.exists() else 'нет файла — запустите assemble_voice.py'}")
 
     print("\n3. Видео")
     for path in (SILENT, VOICED):
