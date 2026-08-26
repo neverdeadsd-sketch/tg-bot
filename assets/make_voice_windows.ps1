@@ -19,7 +19,9 @@ if (-not $Voice) {
     }
     Write-Host "`nНужен русский мужской. Запустите снова, например:"
     Write-Host "  .\assets\make_voice_windows.ps1 -Voice 'Microsoft Pavel'"
-    Write-Host "`nЕсли русских голосов нет: Параметры - Время и язык - Речь - Добавить голоса - Русский."
+    Write-Host "`nЕсли нужного голоса нет, но он есть в OneCore - подключите его:"
+    Write-Host "  (PowerShell от имени администратора)  .\assets\enable_onecore_voice.ps1"
+    Write-Host "`nЕсли русских голосов нет совсем: Параметры - Время и язык - Речь - Добавить голоса - Русский."
     Write-Host "`nСистема может знать больше голосов, чем видит этот интерфейс. Проверить:"
     Write-Host "  Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens' | ForEach-Object { (Get-ItemProperty `$_.PSPath).'(default)' }"
     exit
