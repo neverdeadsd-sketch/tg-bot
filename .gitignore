@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Secrets & local state
+.env
+config.toml
+*.session
+*.session-journal
+sessions/
+# runtime SQLite lives at ./data/; tgnames/data/ is package data and is tracked
+/data/
+*.db
+*.sqlite3
+
+# Exports
+exports/
+/*.csv

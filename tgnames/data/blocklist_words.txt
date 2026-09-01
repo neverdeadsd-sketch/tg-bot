@@ -1,0 +1,26 @@
+# Substrings that make a handle undesirable or risky to register.
+porn
+xxx
+sex
+nude
+escort
+drugs
+weed
+cocaine
+mdma
+scam
+phish
+carding
+cvv
+dumps
+ddos
+botnet
+malware
+ransom
+stolen
+leaked
+child
+loli
+nazi
+kill
+suicide

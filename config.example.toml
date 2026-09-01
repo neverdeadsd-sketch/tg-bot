@@ -1,0 +1,31 @@
+# Copy to config.toml and fill in. Values in .env / environment win over this file.
+
+db = "data/tgnames.db"
+
+[telegram]
+# https://my.telegram.org -> API development tools
+api_id = 0
+api_hash = ""
+phone = ""                       # optional, for non-interactive first login
+session = "sessions/tgnames"     # Telethon session file, without .session
+
+[limits]
+# Availability probing.
+checks_per_minute = 20.0
+checks_per_hour = 400
+checks_per_day = 3000
+# Channel creation. Telegram limits this hard — raising these gets you
+# FloodWait bans, not more usernames.
+claims_per_hour = 5
+claims_per_day = 20
+max_floodwait_seconds = 300      # a longer FloodWait aborts the run
+claim_cooldown_seconds = 45.0
+
+[channel]
+title_template = "@{username}"
+about_template = "Reserved."
+delete_on_failure = true         # remove the channel if the username fails to attach
+
+[selection]
+min_score = 60.0                 # only work on candidates scoring at least this
+exclude_tags = ["reserved", "reserved-part", "risky", "noise"]
