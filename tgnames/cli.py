@@ -208,7 +208,7 @@ def cmd_scan(args) -> int:
             print("\nresult: " + ", ".join(f"{k}={v}" for k, v in sorted(tally.items())))
             free = db.queue(STATUS_AVAILABLE, 20, min_score=min_score)
             if free:
-                print("\ntop free right now:")
+                print("\ntop free right now (API-confirmed):")
                 for c in free:
                     print(f"  {c.tier} {c.score:6.2f}  @{c.username}")
         return 0
@@ -222,8 +222,12 @@ def cmd_scan_web(args) -> int:
 
     cfg = load_config(args.config)
     min_score = args.min_score if args.min_score is not None else cfg.selection.min_score
+    # A page with no owner does NOT mean the handle can be taken: Telegram
+    # reserves short meaningful words and sells them through Fragment, and
+    # those have no owner either. Only the API separates the two, so the web
+    # path gets its own weaker status.
     status_for = {
-        WebAvailability.FREE: storage.STATUS_AVAILABLE,
+        WebAvailability.FREE: storage.STATUS_UNCLAIMED,
         WebAvailability.TAKEN: storage.STATUS_TAKEN,
     }
 
@@ -271,21 +275,41 @@ def cmd_scan_web(args) -> int:
             if status:
                 # Mark the provenance: a web answer is weaker than the API one,
                 # and `claim` re-verifies through the API before creating.
+                verdict = ("no owner visible" if status == storage.STATUS_UNCLAIMED
+                           else "owner visible")
                 db.set_status(cand.username, status,
-                              note=f"{result.detail} (web, unverified)", checked=True)
+                              note=f"{result.detail}: {verdict}", checked=True)
             else:
                 db.log("webcheck", cand.username, f"{result.availability.value}: {result.detail}")
-            mark = {"available": "FREE", "taken": "taken",
-                    "unknown": "unknown", "error": "error"}[result.availability.value]
+            mark = {"available": "no owner", "taken": "taken",
+                    "unknown": " unknown", "error": "   error"}[result.availability.value]
+            if result.availability is WebAvailability.FREE and "likely-reserved" in cand.tags:
+                mark = "reserved?"
             extra = f"  {result.title[:40]}" if result.title else ""
-            print(f"  [{mark:>8}] @{cand.username}  ({cand.score:.1f} {cand.tier}){extra}")
+            print(f"  [{mark:>9}] @{cand.username}  ({cand.score:.1f} {cand.tier}){extra}")
 
-        print("\nresult: " + ", ".join(f"{k}={v}" for k, v in sorted(tally.items())))
+        renamed = {"available": "no owner visible", "taken": "taken",
+                   "unknown": "unknown", "error": "error"}
+        print("\nresult: " + ", ".join(
+            f"{renamed.get(k, k)}={v}" for k, v in sorted(tally.items())))
         if tally.get("unknown"):
             print(f"{tally['unknown']} handle(s) could not be judged and stay "
                   f"queued — they are NOT free, just unknown.")
-        print("Note: these answers come from public pages, not the API. "
-              "`claim` re-checks through the API before creating anything.")
+
+        reserved = [c for c in db.all_by_status(storage.STATUS_UNCLAIMED, 10000)
+                    if "likely-reserved" in c.tags]
+        print("\nIMPORTANT: 'no owner visible' is not the same as claimable. "
+              "Telegram keeps short\nmeaningful words (elite, money, level ...) "
+              "for the Fragment auction — they have no\nowner, so a page check "
+              "cannot see the difference. Only the API can, and it\nreports "
+              "them as 'purchasable'.")
+        if reserved:
+            print(f"\n{len(reserved)} of the stored results are tagged "
+                  f"likely-reserved and are probably NOT free:")
+            for c in reserved[:8]:
+                print(f"    @{c.username}")
+        print("\n`claim` re-checks through the API before creating anything, "
+              "so it will not\nwaste an attempt on a reserved handle.")
     return 0
 
 
@@ -311,10 +335,16 @@ def cmd_claim(args) -> int:
                         value_band=v.value_band, tags=v.tags, source="cli",
                         status=STATUS_AVAILABLE))
             else:
-                queue = db.queue(
-                    STATUS_AVAILABLE, args.limit, min_score=min_score,
-                    exclude_tags=tuple(cfg.selection.exclude_tags),
-                )
+                exclude = tuple(cfg.selection.exclude_tags)
+                queue = db.queue(STATUS_AVAILABLE, args.limit,
+                                 min_score=min_score, exclude_tags=exclude)
+                if len(queue) < args.limit:
+                    # Web results are weaker, but claim re-verifies each handle
+                    # through the API before creating anything, so including
+                    # them costs nothing but a check.
+                    queue += db.queue(storage.STATUS_UNCLAIMED,
+                                      args.limit - len(queue),
+                                      min_score=min_score, exclude_tags=exclude)
             if not queue:
                 print("nothing available to claim — run `scan` first")
                 return 0
@@ -593,16 +623,17 @@ def build_parser() -> argparse.ArgumentParser:
     m = sub.add_parser("mark", help="set a status by hand (e.g. claimed in the app)")
     m.add_argument("username", nargs="+")
     m.add_argument("--status", default=storage.STATUS_CLAIMED, choices=[
-        storage.STATUS_NEW, storage.STATUS_AVAILABLE, storage.STATUS_TAKEN,
-        storage.STATUS_PURCHASABLE, storage.STATUS_CLAIMED, storage.STATUS_SKIPPED])
+        storage.STATUS_NEW, storage.STATUS_AVAILABLE, storage.STATUS_UNCLAIMED,
+        storage.STATUS_TAKEN, storage.STATUS_PURCHASABLE, storage.STATUS_CLAIMED,
+        storage.STATUS_SKIPPED])
     m.add_argument("--note")
     m.set_defaults(func=cmd_mark)
 
     li = sub.add_parser("list", help="show stored candidates")
     li.add_argument("--status", choices=[
-        storage.STATUS_NEW, storage.STATUS_AVAILABLE, storage.STATUS_TAKEN,
-        storage.STATUS_PURCHASABLE, storage.STATUS_INVALID, storage.STATUS_CLAIMED,
-        storage.STATUS_FAILED, storage.STATUS_SKIPPED])
+        storage.STATUS_NEW, storage.STATUS_AVAILABLE, storage.STATUS_UNCLAIMED,
+        storage.STATUS_TAKEN, storage.STATUS_PURCHASABLE, storage.STATUS_INVALID,
+        storage.STATUS_CLAIMED, storage.STATUS_FAILED, storage.STATUS_SKIPPED])
     li.add_argument("-n", "--limit", type=int, default=50)
     li.set_defaults(func=cmd_list)
 

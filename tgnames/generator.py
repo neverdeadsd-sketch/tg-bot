@@ -145,9 +145,13 @@ def mutations(seeds: Iterable[str], max_len: int = MAX_LENGTH) -> Iterator[str]:
 
 
 def from_file(path: str) -> Iterator[str]:
-    """Read candidates from a text file, one per line (# comments allowed)."""
-    with open(path, "r", encoding="utf-8") as fh:
-        lines = [ln.strip() for ln in fh]
+    """Read candidates from a text file, one per line ('-' for stdin)."""
+    if path == "-":
+        import sys
+        lines = [ln.strip() for ln in sys.stdin]
+    else:
+        with open(path, "r", encoding="utf-8") as fh:
+            lines = [ln.strip() for ln in fh]
     yield from _clean(ln.lstrip("@") for ln in lines if ln and not ln.startswith("#"))
 
 

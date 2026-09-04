@@ -62,3 +62,10 @@ def test_from_file_skips_comments(tmp_path):
     path = tmp_path / "seed.txt"
     path.write_text("# comment\n@money\n\nlunar\nzz\n", encoding="utf-8")
     assert list(generator.from_file(str(path))) == ["money", "lunar"]
+
+
+def test_from_file_reads_stdin(monkeypatch):
+    import io
+    import sys
+    monkeypatch.setattr(sys, "stdin", io.StringIO("money\n@lunar\n# skip\nzz\n"))
+    assert list(generator.from_file("-")) == ["money", "lunar"]

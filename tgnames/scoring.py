@@ -411,6 +411,18 @@ def analyze(username: str) -> Valuation:
         score *= 1.05
         tags.append("letter-number")
 
+    # Telegram holds back short, meaningful words and sells them through the
+    # Fragment auction rather than handing them out. They have no owner, so
+    # every page-based check reports them as free while they cannot be taken.
+    # This is a strong prior, not a fact about a specific handle, so it is a
+    # tag the user can weigh — never a verdict.
+    if len(u) <= 6 and u.isalpha() and lex_raw >= 80:
+        tags.append("likely-reserved")
+        reasons.append(
+            "short dictionary word — Telegram usually reserves these for the "
+            "Fragment auction, so 'free' page checks are misleading"
+        )
+
     # A short pure-letter word deserves an extra nudge: that is the shape that
     # actually sells on the secondary market.
     if len(u) <= 6 and u.isalpha() and lex_raw >= 80:

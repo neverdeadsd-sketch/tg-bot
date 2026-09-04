@@ -16,7 +16,8 @@ from pathlib import Path
 
 # Candidate lifecycle.
 STATUS_NEW = "new"                  # scored, never checked
-STATUS_AVAILABLE = "available"      # free right now
+STATUS_AVAILABLE = "available"      # free right now, confirmed through the API
+STATUS_UNCLAIMED = "unclaimed"      # no visible owner, but claimability unverified
 STATUS_TAKEN = "taken"              # occupied by someone else
 STATUS_PURCHASABLE = "purchasable"  # free but only via Fragment auction
 STATUS_INVALID = "invalid"          # Telegram rejects the string

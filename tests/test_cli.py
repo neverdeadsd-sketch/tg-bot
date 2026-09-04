@@ -221,7 +221,7 @@ class TestScanWeb:
         with Storage(db_path) as db:
             level = db.get("level")
             assert level.status == "taken"
-            assert "web, unverified" in level.note
+            assert level.note == "via t.me page: owner visible"
             assert level.checked_at is not None
 
     def test_calibrate_only_checks_nothing(self, monkeypatch, db_path, capsys):
@@ -241,6 +241,24 @@ class TestScanWeb:
         assert "Calibration failed" in capsys.readouterr().err
         with Storage(db_path) as db:
             assert all(c.status == "new" for c in db.all_by_status())
+
+    def test_free_pages_are_not_recorded_as_claimable(self, monkeypatch, db_path, capsys):
+        """Regression: Telegram reserves short words, so 'no owner' != free.
+
+        @elite has no owner and renders like a free page, but it is held back
+        for the Fragment auction and cannot be claimed.
+        """
+        self._install_fake_http(monkeypatch)
+        run(["mark", "elite", "--status", "new"], db_path)
+        capsys.readouterr()
+        run(["scan", "--web", "--delay", "0", "-n", "5"], db_path)
+        out = capsys.readouterr().out
+        with Storage(db_path) as db:
+            row = db.get("elite")
+        assert row.status == "unclaimed", "must not be recorded as available"
+        assert "likely-reserved" in row.tags
+        assert "not the same as claimable" in out
+        assert "likely-reserved and are probably NOT free" in out
 
     def test_unknown_verdicts_stay_queued(self, monkeypatch, db_path, capsys):
         """An unjudgeable handle must never be recorded as available."""
