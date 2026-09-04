@@ -171,6 +171,9 @@ def cmd_generate(args) -> int:
 
 def cmd_scan(args) -> int:
     """Check queued candidates against Telegram."""
+    if args.web:
+        return cmd_scan_web(args)
+
     client = _load_client()
     from .ratelimit import QuotaExceeded
 
@@ -211,6 +214,70 @@ def cmd_scan(args) -> int:
         return 0
 
     return asyncio.run(run())
+
+
+def cmd_scan_web(args) -> int:
+    """Check availability through public t.me pages — no api_id needed."""
+    from .webcheck import CalibrationError, WebAvailability, WebChecker
+
+    cfg = load_config(args.config)
+    min_score = args.min_score if args.min_score is not None else cfg.selection.min_score
+    status_for = {
+        WebAvailability.FREE: storage.STATUS_AVAILABLE,
+        WebAvailability.TAKEN: storage.STATUS_TAKEN,
+    }
+
+    with _open_db(args) as db:
+        checker = WebChecker(delay=args.delay)
+
+        print("Calibrating against handles whose state is known...")
+        def show(handle, expected, features):
+            print(f"  {expected:>8}  @{handle:<22} {len(features)} signal(s)")
+        try:
+            disc = checker.calibrate(on_sample=show)
+        except CalibrationError as exc:
+            print(f"\nCalibration failed: {exc}", file=sys.stderr)
+            return 1
+        except Exception as exc:  # network, DNS, blocked host
+            print(f"\nCould not reach t.me: {exc}", file=sys.stderr)
+            return 1
+        print(f"Calibrated on {disc.samples} pages: {disc.describe()}\n")
+
+        if args.calibrate_only:
+            print("Calibration succeeded — the checker can tell the two apart.")
+            return 0
+
+        queue = db.queue(
+            storage.STATUS_NEW, args.limit, min_score=min_score,
+            exclude_tags=tuple(cfg.selection.exclude_tags),
+        )
+        if not queue:
+            print("queue is empty — run `generate` first, or lower --min-score")
+            return 0
+
+        print(f"checking {len(queue)} candidates via t.me "
+              f"(1 request per {args.delay:g}s)")
+        tally: dict[str, int] = {}
+        for cand in queue:
+            result = checker.check(cand.username)
+            tally[result.availability.value] = tally.get(result.availability.value, 0) + 1
+            status = status_for.get(result.availability)
+            if status:
+                # Mark the provenance: a web answer is weaker than the API one,
+                # and `claim` re-verifies through the API before creating.
+                db.set_status(cand.username, status,
+                              note=f"{result.detail} (web, unverified)", checked=True)
+            else:
+                db.log("webcheck", cand.username, f"{result.availability.value}: {result.detail}")
+            mark = {"available": "FREE", "taken": "taken",
+                    "unknown": "unknown", "error": "error"}[result.availability.value]
+            extra = f"  {result.title[:40]}" if result.title else ""
+            print(f"  [{mark:>8}] @{cand.username}  ({cand.score:.1f} {cand.tier}){extra}")
+
+        print("\nresult: " + ", ".join(f"{k}={v}" for k, v in sorted(tally.items())))
+        print("Note: these answers come from public pages, not the API. "
+              "`claim` re-checks through the API before creating anything.")
+    return 0
 
 
 def cmd_claim(args) -> int:
@@ -443,6 +510,13 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("scan", help="check availability against Telegram")
     s.add_argument("-n", "--limit", type=int, default=50)
     s.add_argument("--min-score", type=float)
+    s.add_argument("--web", action="store_true",
+                   help="probe public t.me pages instead of the API "
+                        "(no api_id needed, weaker answers)")
+    s.add_argument("--calibrate-only", action="store_true",
+                   help="with --web: only prove the checker works, check nothing")
+    s.add_argument("--delay", type=float, default=1.5,
+                   help="with --web: seconds between requests (default 1.5)")
     s.set_defaults(func=cmd_scan)
 
     c = sub.add_parser("claim", help="hold free usernames by creating channels")
@@ -465,6 +539,10 @@ def build_parser() -> argparse.ArgumentParser:
     h.add_argument("--no-filter", action="store_true")
     h.add_argument("--show", type=int, default=10)
     h.add_argument("--seed", type=int)
+    h.add_argument("--web", action="store_true",
+                   help="scan through t.me instead of the API")
+    h.add_argument("--calibrate-only", action="store_true", help=argparse.SUPPRESS)
+    h.add_argument("--delay", type=float, default=1.5)
     h.add_argument("--claim-limit", type=int, default=3,
                    help="how many handles to actually claim in this pass")
     h.add_argument("--execute", action="store_true")

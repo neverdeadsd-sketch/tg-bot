@@ -185,3 +185,59 @@ class TestWithoutTelethon:
         message = str(exc.value)
         assert "Telethon" in message and "pip install -r requirements.txt" in message
         assert "Traceback" not in message
+
+
+class TestScanWeb:
+    """`scan --web` must work with no api_id and no Telethon installed."""
+
+    def _install_fake_http(self, monkeypatch, default=None):
+        from tests.test_webcheck import FREE_PAGE, TAKEN_PAGE, FakeOpener
+        import tgnames.webcheck as webcheck
+
+        opener = FakeOpener(
+            {"durov": TAKEN_PAGE, "telegram": TAKEN_PAGE, "level": TAKEN_PAGE},
+            default if default is not None else FREE_PAGE,
+        )
+        monkeypatch.setattr(
+            webcheck.urllib.request, "build_opener", lambda *a, **k: opener
+        )
+        return opener
+
+    def test_runs_without_telethon(self, monkeypatch, db_path, capsys):
+        self._install_fake_http(monkeypatch)
+        _hide_telethon(monkeypatch)
+        run(["generate", "-s", "words", "-n", "3"], db_path)
+        capsys.readouterr()
+        assert run(["scan", "--web", "--delay", "0", "-n", "3"], db_path) == 0
+        out = capsys.readouterr().out
+        assert "Calibrated on 5 pages" in out
+        assert "taken" in out or "FREE" in out
+
+    def test_writes_statuses_with_provenance(self, monkeypatch, db_path, capsys):
+        self._install_fake_http(monkeypatch)
+        run(["generate", "-s", "words", "-n", "3"], db_path)
+        run(["scan", "--web", "--delay", "0", "-n", "3"], db_path)
+        capsys.readouterr()
+        with Storage(db_path) as db:
+            level = db.get("level")
+            assert level.status == "taken"
+            assert "web, unverified" in level.note
+            assert level.checked_at is not None
+
+    def test_calibrate_only_checks_nothing(self, monkeypatch, db_path, capsys):
+        opener = self._install_fake_http(monkeypatch)
+        run(["generate", "-s", "words", "-n", "3"], db_path)
+        capsys.readouterr()
+        assert run(["scan", "--web", "--calibrate-only", "--delay", "0"], db_path) == 0
+        assert "Calibration succeeded" in capsys.readouterr().out
+        assert len(opener.requested) == 5  # controls only
+
+    def test_refuses_when_it_cannot_calibrate(self, monkeypatch, db_path, capsys):
+        from tests.test_webcheck import TAKEN_PAGE
+        self._install_fake_http(monkeypatch, default=TAKEN_PAGE)
+        run(["generate", "-s", "words", "-n", "3"], db_path)
+        capsys.readouterr()
+        assert run(["scan", "--web", "--delay", "0"], db_path) == 1
+        assert "Calibration failed" in capsys.readouterr().err
+        with Storage(db_path) as db:
+            assert all(c.status == "new" for c in db.all_by_status())
