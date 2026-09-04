@@ -241,3 +241,44 @@ class TestScanWeb:
         assert "Calibration failed" in capsys.readouterr().err
         with Storage(db_path) as db:
             assert all(c.status == "new" for c in db.all_by_status())
+
+
+class TestMark:
+    def test_defaults_to_claimed(self, db_path, capsys):
+        assert run(["mark", "money"], db_path) == 0
+        assert "-> claimed" in capsys.readouterr().out
+        with Storage(db_path) as db:
+            row = db.get("money")
+            assert row.status == "claimed" and row.claimed_at is not None
+
+    def test_creates_unknown_handles(self, db_path):
+        run(["mark", "goldbank", "--status", "taken"], db_path)
+        with Storage(db_path) as db:
+            assert db.get("goldbank").status == "taken"
+
+    def test_updates_an_existing_row_without_duplicating(self, db_path):
+        run(["generate", "-s", "words", "-n", "5"], db_path)
+        with Storage(db_path) as db:
+            name = db.all_by_status()[0].username
+            before = len(db.all_by_status())
+        run(["mark", name], db_path)
+        with Storage(db_path) as db:
+            assert len(db.all_by_status()) == before
+            assert db.get(name).status == "claimed"
+
+    def test_skips_invalid(self, db_path, capsys):
+        run(["mark", "zz", "money"], db_path)
+        out = capsys.readouterr().out
+        assert "skipping @zz" in out and "1 handle(s) updated" in out
+
+    def test_marked_handles_leave_the_scan_queue(self, db_path):
+        run(["generate", "-s", "words", "-n", "5"], db_path)
+        with Storage(db_path) as db:
+            name = db.all_by_status()[0].username
+        run(["mark", name, "--status", "skipped"], db_path)
+        with Storage(db_path) as db:
+            assert name not in [c.username for c in db.queue("new", 10)]
+
+    def test_works_without_telethon(self, monkeypatch, db_path):
+        _hide_telethon(monkeypatch)
+        assert run(["mark", "money"], db_path) == 0

@@ -370,6 +370,33 @@ def cmd_hunt(args) -> int:
     return cmd_claim(claim_args)
 
 
+def cmd_mark(args) -> int:
+    """Record a status by hand — for handles claimed inside the Telegram app.
+
+    Claiming needs api_id, but a channel created by hand in the client is just
+    as good a claim. This keeps the database honest about it so the handle is
+    not offered again.
+    """
+    with _open_db(args) as db:
+        changed = 0
+        for raw in args.username:
+            v = analyze(raw)
+            if not v.valid:
+                print(f"  skipping @{v.username}: {v.error}")
+                continue
+            if db.get(v.username) is None:
+                db.upsert_many([v], source="manual")
+            db.set_status(
+                v.username, args.status, note=args.note or "marked by hand",
+                checked=True, claimed=args.status == storage.STATUS_CLAIMED,
+            )
+            db.log("mark", v.username, args.status)
+            print(f"  @{v.username} -> {args.status}")
+            changed += 1
+        print(f"{changed} handle(s) updated")
+    return 0
+
+
 def cmd_list(args) -> int:
     with _open_db(args) as db:
         items = db.all_by_status(args.status, args.limit)
@@ -548,6 +575,14 @@ def build_parser() -> argparse.ArgumentParser:
     h.add_argument("--execute", action="store_true")
     h.add_argument("-y", "--yes", action="store_true")
     h.set_defaults(func=cmd_hunt, username=[])
+
+    m = sub.add_parser("mark", help="set a status by hand (e.g. claimed in the app)")
+    m.add_argument("username", nargs="+")
+    m.add_argument("--status", default=storage.STATUS_CLAIMED, choices=[
+        storage.STATUS_NEW, storage.STATUS_AVAILABLE, storage.STATUS_TAKEN,
+        storage.STATUS_PURCHASABLE, storage.STATUS_CLAIMED, storage.STATUS_SKIPPED])
+    m.add_argument("--note")
+    m.set_defaults(func=cmd_mark)
 
     li = sub.add_parser("list", help="show stored candidates")
     li.add_argument("--status", choices=[
