@@ -15,20 +15,62 @@
 
 ## Установка
 
+Нужен **Python 3.11 или новее** (используется `tomllib` из стандартной
+библиотеки). Проверить свою версию: `python --version`.
+
+Код лежит в ветке `claude/telegram-username-analyzer-bot-8ks7fm` — при
+клонировании её нужно указать явно, иначе скачается пустой `main`.
+
+### Windows (PowerShell)
+
+```powershell
+cd $HOME
+git clone -b claude/telegram-username-analyzer-bot-8ks7fm https://github.com/neverdeadsd-sketch/tg-bot.git
+cd tg-bot
+
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+
+copy .env.example .env
+copy config.example.toml config.toml
+```
+
+Дальше вызывайте интерпретатор из venv напрямую — так не нужно возиться с
+`Activate.ps1` и политикой выполнения PowerShell:
+
+```powershell
+.\.venv\Scripts\python.exe run.py analyze money
+```
+
+Если git не установлен — можно скачать [ZIP-архив ветки][zip], распаковать и
+начать с шага `python -m venv .venv`.
+
+[zip]: https://github.com/neverdeadsd-sketch/tg-bot/archive/refs/heads/claude/telegram-username-analyzer-bot-8ks7fm.zip
+
+### Linux / macOS
+
 ```bash
+git clone -b claude/telegram-username-analyzer-bot-8ks7fm https://github.com/neverdeadsd-sketch/tg-bot.git
+cd tg-bot
+
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-cp .env.example .env          # api_id / api_hash с https://my.telegram.org
+cp .env.example .env
 cp config.example.toml config.toml
 ```
 
+### Ключи API
+
 `api_id` и `api_hash` берутся на <https://my.telegram.org> → *API development
-tools*. Первый вход создаёт файл сессии:
+tools* и вписываются в `.env`. Первый вход создаёт файл сессии:
 
 ```bash
 python run.py login
 ```
+
+Команда `analyze` работает и без ключей — она полностью офлайновая. Ключи
+нужны только для `scan`, `claim`, `hunt`, `login` и `inventory`.
 
 ## Быстрый старт
 
