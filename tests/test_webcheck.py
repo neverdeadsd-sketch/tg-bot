@@ -279,3 +279,98 @@ class TestDiscriminator:
     def test_unusable_discriminator_never_answers(self):
         assert not Discriminator().usable()
         assert Discriminator().classify(frozenset()) is WebAvailability.UNKNOWN
+
+
+# --- Fragment cross-check ---------------------------------------------------
+# Pages modelled on what the client reveals: a handle can be ownerless on t.me
+# and still be "taken, but available for purchase".
+
+FRAGMENT_LISTED = (
+    '<html><body><div class="tm-section">'
+    '<div class="table-cell-status-avail">For sale</div>'
+    '<div class="table-cell-value">1000 TON</div>'
+    "</div>" + "<!-- pad -->" * 200 + "</body></html>"
+)
+FRAGMENT_ABSENT = (
+    '<html><body><div class="tm-section">'
+    '<div class="tm-empty">Nothing found</div>'
+    "</div>" + "<!-- pad -->" * 200 + "</body></html>"
+)
+
+
+def make_fragment(pages=None, default=FRAGMENT_ABSENT, seed=1):
+    from tgnames.webcheck import FragmentChecker
+    opener = FakeOpener(pages or {}, default)
+    return FragmentChecker(delay=0.0, opener=opener, rng=random.Random(seed)), opener
+
+
+class TestFragmentChecker:
+    def test_learns_what_a_listing_looks_like(self):
+        from tgnames.webcheck import FragmentStatus
+        checker, _ = make_fragment({"alalal": FRAGMENT_LISTED})
+        disc = checker.calibrate(["alalal"])
+        assert disc.usable()
+        assert "cls:table-cell-status-avail" in disc.taken_evidence
+
+    def test_detects_a_handle_on_sale(self):
+        from tgnames.webcheck import FragmentStatus
+        checker, _ = make_fragment({"alalal": FRAGMENT_LISTED,
+                                    "pools": FRAGMENT_LISTED})
+        checker.calibrate(["alalal"])
+        assert checker.check("pools") is FragmentStatus.LISTED
+
+    def test_unlisted_handle(self):
+        from tgnames.webcheck import FragmentStatus
+        checker, _ = make_fragment({"alalal": FRAGMENT_LISTED})
+        checker.calibrate(["alalal"])
+        assert checker.check("vaultpay") is FragmentStatus.NOT_LISTED
+
+    def test_refuses_without_a_control(self):
+        checker, _ = make_fragment()
+        with pytest.raises(CalibrationError, match="at least one handle"):
+            checker.calibrate([])
+
+    def test_refuses_when_the_control_looks_unlisted(self):
+        checker, _ = make_fragment({"alalal": FRAGMENT_ABSENT})
+        with pytest.raises(CalibrationError, match="looks the same"):
+            checker.calibrate(["alalal"])
+
+    def test_404_for_the_control_is_explained(self):
+        error = urllib.error.HTTPError("u", 404, "nf", {}, None)
+        checker, _ = make_fragment({"alalal": error})
+        with pytest.raises(CalibrationError, match="not actually listed"):
+            checker.calibrate(["alalal"])
+
+    def test_404_is_a_clean_not_listed_signal(self):
+        from tgnames.webcheck import FragmentStatus
+        error = urllib.error.HTTPError("u", 404, "nf", {}, None)
+        checker, _ = make_fragment({"alalal": FRAGMENT_LISTED}, default=error)
+        checker.calibrate(["alalal"])
+        assert checker.check("whatever") is FragmentStatus.NOT_LISTED
+
+    def test_uncalibrated_checker_answers_unknown(self):
+        from tgnames.webcheck import FragmentStatus
+        checker, _ = make_fragment()
+        assert checker.check("pools") is FragmentStatus.UNKNOWN
+
+    def test_transport_failure_is_unknown(self):
+        from tgnames.webcheck import FragmentStatus
+        checker, opener = make_fragment({"alalal": FRAGMENT_LISTED})
+        checker.calibrate(["alalal"])
+        opener.pages["boom"] = urllib.error.URLError("no route")
+        assert checker.check("boom") is FragmentStatus.UNKNOWN
+
+
+class TestClassTokens:
+    def test_extracts_class_names(self):
+        from tgnames.webcheck import class_tokens
+        assert class_tokens('<a class="one two">x</a>') == {"cls:one", "cls:two"}
+
+    def test_is_capped(self):
+        from tgnames.webcheck import class_tokens
+        html = "".join(f'<i class="c{i}"></i>' for i in range(1000))
+        assert len(class_tokens(html, cap=50)) <= 50
+
+    def test_empty_page_has_no_tokens(self):
+        from tgnames.webcheck import class_tokens
+        assert class_tokens("<html><body>plain</body></html>") == frozenset()

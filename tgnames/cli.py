@@ -223,7 +223,10 @@ def cmd_scan(args) -> int:
 
 def cmd_scan_web(args) -> int:
     """Check availability through public t.me pages — no api_id needed."""
-    from .webcheck import CalibrationError, TrustLost, WebAvailability, WebChecker
+    from .webcheck import (
+        CalibrationError, FragmentChecker, FragmentStatus, TrustLost,
+        WebAvailability, WebChecker,
+    )
 
     cfg = load_config(args.config)
     min_score = args.min_score if args.min_score is not None else cfg.selection.min_score
@@ -252,6 +255,27 @@ def cmd_scan_web(args) -> int:
             return 1
         print(f"Calibrated on {disc.samples} pages: {disc.describe()}\n")
 
+        # t.me cannot tell "free" from "on sale at Fragment" — both are
+        # ownerless. Fragment can, when it proves it recognises a listing.
+        fragment = None
+        if args.fragment_control:
+            print("Calibrating the Fragment cross-check...")
+            fragment = FragmentChecker(delay=args.delay)
+            try:
+                fdisc = fragment.calibrate(args.fragment_control, on_sample=show)
+                print(f"Fragment calibrated on {fdisc.samples} pages: "
+                      f"{len(fdisc.taken_evidence)} signal(s) mark a listing\n")
+            except CalibrationError as exc:
+                print(f"Fragment check unavailable: {exc}\n", file=sys.stderr)
+                fragment = None
+            except Exception as exc:
+                print(f"Could not reach fragment.com: {exc}\n", file=sys.stderr)
+                fragment = None
+        else:
+            print("No --fragment-control given, so handles offered for sale on\n"
+                  "Fragment cannot be told apart from free ones. See the note "
+                  "at the end.\n")
+
         if args.calibrate_only:
             print("Calibration succeeded — the checker can tell the two apart.")
             return 0
@@ -278,29 +302,43 @@ def cmd_scan_web(args) -> int:
                 print("Verdicts already stored are the ones taken while "
                       "calibration still held.", file=sys.stderr)
                 return 1
-            tally[result.availability.value] = tally.get(result.availability.value, 0) + 1
-            status = status_for.get(result.availability)
+            # An ownerless page may still be a Fragment listing.
+            verdict = result.availability
+            on_sale = False
+            if verdict is WebAvailability.FREE and fragment is not None:
+                if fragment.check(cand.username) is FragmentStatus.LISTED:
+                    on_sale = True
+
+            key = "purchasable" if on_sale else verdict.value
+            tally[key] = tally.get(key, 0) + 1
+            status = (storage.STATUS_PURCHASABLE if on_sale
+                      else status_for.get(verdict))
             if status:
                 # Mark the provenance: a web answer is weaker than the API one,
                 # and `claim` re-verifies through the API before creating.
-                verdict = ("no owner visible" if status == storage.STATUS_UNCLAIMED
-                           else "owner visible")
+                note = {
+                    storage.STATUS_PURCHASABLE: "listed for sale on Fragment",
+                    storage.STATUS_UNCLAIMED: "no owner visible",
+                }.get(status, "owner visible")
                 db.set_status(cand.username, status,
-                              note=f"{result.detail}: {verdict}", checked=True)
+                              note=f"{result.detail}: {note}", checked=True)
             else:
                 db.log("webcheck", cand.username, f"{result.availability.value}: {result.detail}")
             mark = {"available": "no owner", "taken": "taken",
-                    "unknown": " unknown", "error": "   error"}[result.availability.value]
-            # Score afresh: tags stored by an older run can predate a change
-            # to the scorer, and a stale tag would hide the warning.
-            if (result.availability is WebAvailability.FREE
+                    "unknown": " unknown", "error": "   error"}[verdict.value]
+            if on_sale:
+                mark = " for sale"
+            elif (verdict is WebAvailability.FREE
+                    # Score afresh: tags stored by an older run can predate a
+                    # change to the scorer, and a stale tag hides the warning.
                     and "likely-reserved" in analyze(cand.username).tags):
                 mark = "reserved?"
             extra = f"  {result.title[:40]}" if result.title else ""
             print(f"  [{mark:>9}] @{cand.username}  ({cand.score:.1f} {cand.tier}){extra}")
 
         renamed = {"available": "no owner visible", "taken": "taken",
-                   "unknown": "unknown", "error": "error"}
+                   "unknown": "unknown", "error": "error",
+                   "purchasable": "for sale on Fragment"}
         print("\nresult: " + ", ".join(
             f"{renamed.get(k, k)}={v}" for k, v in sorted(tally.items())))
         if tally.get("unknown"):
@@ -310,10 +348,12 @@ def cmd_scan_web(args) -> int:
         reserved = [c for c in db.all_by_status(storage.STATUS_UNCLAIMED, 10000)
                     if "likely-reserved" in analyze(c.username).tags]
         print("\nIMPORTANT: 'no owner visible' is not the same as claimable. "
-              "Telegram keeps short\nmeaningful words (elite, money, level ...) "
-              "for the Fragment auction — they have no\nowner, so a page check "
-              "cannot see the difference. Only the API can, and it\nreports "
-              "them as 'purchasable'.")
+              "A handle held for the\nFragment auction has no owner either — "
+              "the client shows it as \"taken, but\navailable for purchase\".")
+        if fragment is None:
+            print("The Fragment cross-check did not run, so such handles are "
+                  "still counted as\n'no owner' here. Pass --fragment-control "
+                  "with a handle you have seen offered\nfor sale to enable it.")
         if reserved:
             print(f"\n{len(reserved)} of the stored results are tagged "
                   f"likely-reserved and are probably NOT free:")
@@ -659,6 +699,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="with --web: only prove the checker works, check nothing")
     s.add_argument("--delay", type=float, default=2.0,
                    help="with --web: seconds between requests (default 2.0)")
+    s.add_argument("--fragment-control", action="append", metavar="HANDLE",
+                   help="with --web: a handle you have seen offered for sale "
+                        "('taken, but available for purchase'). Enables the "
+                        "Fragment cross-check, which separates handles on "
+                        "auction from genuinely free ones (repeatable)")
     s.add_argument("--include-reserved", action="store_true",
                    help="also check handles tagged likely-reserved "
                         "(all 5-character ones and short dictionary words); "
@@ -697,6 +742,7 @@ def build_parser() -> argparse.ArgumentParser:
     h.add_argument("--delay", type=float, default=2.0)
     h.add_argument("--control", action="append")
     h.add_argument("--include-reserved", action="store_true")
+    h.add_argument("--fragment-control", action="append")
     h.add_argument("--claim-limit", type=int, default=3,
                    help="how many handles to actually claim in this pass")
     h.add_argument("--execute", action="store_true")

@@ -418,7 +418,10 @@ def analyze(username: str) -> Valuation:
     # exhausted: a scan of twenty such handles found none that could be taken.
     # This is a prior about a class of handles, not a fact about any specific
     # one, so it is a tag the user can weigh — never a verdict.
-    if len(u) == MIN_LENGTH or (len(u) <= 6 and u.isalpha() and lex_raw >= 80):
+    structural = {"repeat", "run", "palindrome", "keyboard"} & set(tags)
+    if (len(u) == MIN_LENGTH
+            or (len(u) <= 6 and u.isalpha() and lex_raw >= 80)
+            or (len(u) <= 8 and structural)):
         tags.append("likely-reserved")
         reasons.append(
             "short dictionary word — Telegram usually reserves these for the "

@@ -406,3 +406,87 @@ class TestStatsByLength:
         assert by_length[5][3] == "1"   # reserved
         assert by_length[8][2] == "1"   # taken
         assert by_length[8][4] == "1"   # no owner
+
+
+class TestScanWebFragment:
+    """A handle can be ownerless on t.me and still be on sale at Fragment."""
+
+    def _install(self, monkeypatch, tme_extra=None, fragment_pages=None):
+        from tests.test_webcheck import (
+            CONTROLS, FRAGMENT_ABSENT, FRAGMENT_LISTED, FREE_PAGE, FakeOpener,
+        )
+        import tgnames.webcheck as webcheck
+
+        tme = FakeOpener({**CONTROLS, **(tme_extra or {})}, FREE_PAGE)
+        frag = FakeOpener(fragment_pages or {}, FRAGMENT_ABSENT)
+
+        def build_opener(*a, **k):
+            # The scan builds the t.me opener first, then the Fragment one.
+            return tme if build_opener.calls.append(1) or len(build_opener.calls) == 1 else frag
+
+        build_opener.calls = []
+        monkeypatch.setattr(webcheck.urllib.request, "build_opener", build_opener)
+        return tme, frag
+
+    def test_listed_handle_becomes_purchasable(self, monkeypatch, db_path, capsys):
+        from tests.test_webcheck import FRAGMENT_LISTED
+        self._install(monkeypatch, fragment_pages={
+            "alalal": FRAGMENT_LISTED, "vaultpay": FRAGMENT_LISTED,
+        })
+        run(["mark", "vaultpay", "--status", "new"], db_path)
+        capsys.readouterr()
+        assert run(["scan", "--web", "--delay", "0", "-n", "3",
+                    "--fragment-control", "alalal"], db_path) == 0
+        out = capsys.readouterr().out
+        assert "for sale" in out
+        with Storage(db_path) as db:
+            row = db.get("vaultpay")
+        assert row.status == "purchasable"
+        assert "Fragment" in row.note
+
+    def test_unlisted_handle_stays_unclaimed(self, monkeypatch, db_path, capsys):
+        from tests.test_webcheck import FRAGMENT_LISTED
+        self._install(monkeypatch, fragment_pages={"alalal": FRAGMENT_LISTED})
+        run(["mark", "vaultpay", "--status", "new"], db_path)
+        capsys.readouterr()
+        run(["scan", "--web", "--delay", "0", "-n", "3",
+             "--fragment-control", "alalal"], db_path)
+        with Storage(db_path) as db:
+            assert db.get("vaultpay").status == "unclaimed"
+
+    def test_without_a_control_the_gap_is_stated(self, monkeypatch, db_path, capsys):
+        self._install(monkeypatch)
+        run(["mark", "vaultpay", "--status", "new"], db_path)
+        capsys.readouterr()
+        run(["scan", "--web", "--delay", "0", "-n", "3"], db_path)
+        out = capsys.readouterr().out
+        assert "No --fragment-control given" in out
+        assert "Fragment cross-check did not run" in out
+
+    def test_a_bad_control_disables_the_check_without_failing(
+        self, monkeypatch, db_path, capsys
+    ):
+        from tests.test_webcheck import FRAGMENT_ABSENT
+        self._install(monkeypatch, fragment_pages={"notlisted": FRAGMENT_ABSENT})
+        run(["mark", "vaultpay", "--status", "new"], db_path)
+        capsys.readouterr()
+        assert run(["scan", "--web", "--delay", "0", "-n", "3",
+                    "--fragment-control", "notlisted"], db_path) == 0
+        err = capsys.readouterr().err
+        assert "Fragment check unavailable" in err
+
+    def test_listed_handles_are_labelled_for_sale_not_reserved(
+        self, monkeypatch, db_path, capsys
+    ):
+        """The per-line label must match the verdict that was stored."""
+        from tests.test_webcheck import FRAGMENT_LISTED
+        self._install(monkeypatch, fragment_pages={
+            "alalal": FRAGMENT_LISTED, "asasas": FRAGMENT_LISTED,
+        })
+        run(["mark", "asasas", "--status", "new"], db_path)
+        capsys.readouterr()
+        run(["scan", "--web", "--delay", "0", "-n", "3", "--include-reserved",
+             "--fragment-control", "alalal"], db_path)
+        line = next(l for l in capsys.readouterr().out.splitlines()
+                    if "@asasas" in l)
+        assert "for sale" in line and "reserved?" not in line

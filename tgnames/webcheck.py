@@ -325,3 +325,154 @@ class WebChecker:
                 f"that no unreliable verdict is stored — wait, or raise --delay."
             )
         return WebResult(username, WebAvailability.UNKNOWN, detail)
+
+
+# ---------------------------------------------------------------------------
+# Fragment cross-check
+# ---------------------------------------------------------------------------
+# t.me cannot distinguish "free" from "listed on the Fragment auction": both
+# serve an ownerless page, and the client only reveals the difference as
+# "Sorry, this link is taken. But it's available for purchase." Fragment
+# publishes a page per username, so it can answer that question keylessly.
+#
+# The markup there is undocumented too, so the same rule applies: prove the
+# classifier against handles of known state, refuse otherwise. The listed-side
+# control cannot be guessed, so it has to be supplied by the caller — someone
+# who has actually seen a handle offered for sale.
+
+FRAGMENT_URL = "https://fragment.com/username/"
+
+
+class FragmentStatus(str, Enum):
+    LISTED = "purchasable"      # on sale — cannot simply be claimed
+    NOT_LISTED = "not_listed"
+    UNKNOWN = "unknown"
+
+
+def class_tokens(html: str, cap: int = 400) -> frozenset[str]:
+    """CSS class names used on a page.
+
+    A site-agnostic feature space: rather than guessing which words matter on
+    a page whose markup is undocumented, let calibration pick from whatever
+    structure the page actually uses.
+    """
+    tokens: set[str] = set()
+    for match in re.finditer(r'class="([^"]{1,300})"', html, re.I):
+        for token in match.group(1).split():
+            tokens.add(f"cls:{token.lower()}")
+            if len(tokens) >= cap:
+                return frozenset(tokens)
+    return frozenset(tokens)
+
+
+def page_features(html: str) -> frozenset[str]:
+    """Generic features for a page whose markup is not known in advance."""
+    return class_tokens(html) | {size_bucket(html)}
+
+
+class FragmentChecker:
+    """Answers 'is this handle being sold on Fragment', or refuses to."""
+
+    def __init__(self, delay: float = 2.0, timeout: float = 15.0,
+                 opener=None, rng: random.Random | None = None):
+        self.delay = delay
+        self.timeout = timeout
+        self.rng = rng or random.Random()
+        self._opener = opener or urllib.request.build_opener()
+        self._last_request = 0.0
+        self.discriminator = Discriminator()
+
+    def fetch(self, username: str) -> str:
+        wait = self.delay - (time.monotonic() - self._last_request)
+        if wait > 0:
+            time.sleep(wait)
+        self._last_request = time.monotonic()
+        request = urllib.request.Request(
+            FRAGMENT_URL + username, headers={"User-Agent": USER_AGENT}
+        )
+        with self._opener.open(request, timeout=self.timeout) as response:
+            return response.read().decode("utf-8", errors="replace")
+
+    def calibrate(self, listed_controls, on_sample=None) -> Discriminator:
+        """Learn what a for-sale page looks like from handles known to be one."""
+        if not listed_controls:
+            raise CalibrationError(
+                "The Fragment check needs at least one handle you have seen "
+                "offered for sale, to prove it can recognise one. Pass it with "
+                "--fragment-control (the client says 'available for purchase' "
+                "on such a handle)."
+            )
+
+        listed, absent = [], []
+        for handle in listed_controls:
+            try:
+                features = page_features(self.fetch(handle))
+            except urllib.error.HTTPError as exc:
+                raise CalibrationError(
+                    f"Fragment returned HTTP {exc.code} for the control "
+                    f"@{handle}. If that handle is not actually listed, pass "
+                    f"one that is."
+                ) from exc
+            listed.append(features)
+            if on_sample:
+                on_sample(handle, "for sale", features)
+
+        for _ in range(CONTROL_FREE_COUNT):
+            handle = random_handle(rng=self.rng)
+            try:
+                features = page_features(self.fetch(handle))
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    # A 404 for an unlisted handle is itself a clean signal.
+                    features = frozenset({"http:404"})
+                else:
+                    raise CalibrationError(
+                        f"Fragment returned HTTP {exc.code} while calibrating."
+                    ) from exc
+            absent.append(features)
+            if on_sample:
+                on_sample(handle, "not listed", features)
+
+        signature = absent[0]
+        if any(f != signature for f in absent):
+            raise CalibrationError(
+                "Fragment pages for handles that cannot exist differ from each "
+                "other, so there is no reliable 'not listed' page to compare "
+                "against. Skipping the Fragment check."
+            )
+        evidence = frozenset().union(*listed) - signature
+        if not evidence:
+            raise CalibrationError(
+                "A handle known to be for sale looks the same on Fragment as "
+                "one that cannot exist. Skipping the Fragment check rather "
+                "than guessing."
+            )
+
+        self.discriminator = Discriminator(
+            free_signature=signature, taken_evidence=evidence,
+            samples=len(listed) + len(absent),
+        )
+        return self.discriminator
+
+    def check(self, username: str) -> FragmentStatus:
+        if not self.discriminator.usable():
+            return FragmentStatus.UNKNOWN
+        try:
+            html = self.fetch(username)
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                features = frozenset({"http:404"})
+            else:
+                return FragmentStatus.UNKNOWN
+        except (urllib.error.URLError, OSError, TimeoutError):
+            return FragmentStatus.UNKNOWN
+        else:
+            if len(html) < MIN_PLAUSIBLE_BYTES:
+                return FragmentStatus.UNKNOWN
+            features = page_features(html)
+
+        verdict = self.discriminator.classify(features)
+        return {
+            WebAvailability.TAKEN: FragmentStatus.LISTED,
+            WebAvailability.FREE: FragmentStatus.NOT_LISTED,
+        }.get(verdict, FragmentStatus.UNKNOWN)
