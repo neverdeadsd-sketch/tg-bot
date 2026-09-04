@@ -190,14 +190,14 @@ class TestWithoutTelethon:
 class TestScanWeb:
     """`scan --web` must work with no api_id and no Telethon installed."""
 
-    def _install_fake_http(self, monkeypatch, default=None):
-        from tests.test_webcheck import FREE_PAGE, TAKEN_PAGE, FakeOpener
+    def _install_fake_http(self, monkeypatch, default=None, extra=None):
+        from tests.test_webcheck import CONTROLS, FREE_PAGE, RICH_PAGE, FakeOpener
         import tgnames.webcheck as webcheck
 
-        opener = FakeOpener(
-            {"durov": TAKEN_PAGE, "telegram": TAKEN_PAGE, "level": TAKEN_PAGE},
-            default if default is not None else FREE_PAGE,
-        )
+        pages = dict(CONTROLS)
+        pages["level"] = RICH_PAGE
+        pages.update(extra or {})
+        opener = FakeOpener(pages, default if default is not None else FREE_PAGE)
         monkeypatch.setattr(
             webcheck.urllib.request, "build_opener", lambda *a, **k: opener
         )
@@ -210,7 +210,7 @@ class TestScanWeb:
         capsys.readouterr()
         assert run(["scan", "--web", "--delay", "0", "-n", "3"], db_path) == 0
         out = capsys.readouterr().out
-        assert "Calibrated on 5 pages" in out
+        assert "Calibrated on 6 pages" in out
         assert "taken" in out or "FREE" in out
 
     def test_writes_statuses_with_provenance(self, monkeypatch, db_path, capsys):
@@ -230,17 +230,55 @@ class TestScanWeb:
         capsys.readouterr()
         assert run(["scan", "--web", "--calibrate-only", "--delay", "0"], db_path) == 0
         assert "Calibration succeeded" in capsys.readouterr().out
-        assert len(opener.requested) == 5  # controls only
+        assert len(opener.requested) == 6  # controls only
 
     def test_refuses_when_it_cannot_calibrate(self, monkeypatch, db_path, capsys):
-        from tests.test_webcheck import TAKEN_PAGE
-        self._install_fake_http(monkeypatch, default=TAKEN_PAGE)
+        from tests.test_webcheck import RICH_PAGE
+        self._install_fake_http(monkeypatch, default=RICH_PAGE)
         run(["generate", "-s", "words", "-n", "3"], db_path)
         capsys.readouterr()
         assert run(["scan", "--web", "--delay", "0"], db_path) == 1
         assert "Calibration failed" in capsys.readouterr().err
         with Storage(db_path) as db:
             assert all(c.status == "new" for c in db.all_by_status())
+
+    def test_unknown_verdicts_stay_queued(self, monkeypatch, db_path, capsys):
+        """An unjudgeable handle must never be recorded as available."""
+        from tests.test_webcheck import STRANGE_PAGE
+        self._install_fake_http(monkeypatch, extra={"radar": STRANGE_PAGE})
+        run(["generate", "-s", "words", "-n", "3"], db_path)
+        run(["scan", "--web", "--delay", "0", "-n", "3"], db_path)
+        out = capsys.readouterr().out
+        assert "NOT free, just unknown" in out
+        with Storage(db_path) as db:
+            assert db.get("radar").status == "new"
+
+    def test_throttling_stops_the_run(self, monkeypatch, db_path, capsys):
+        from tests.test_webcheck import DEGRADED_PAGE
+        opener = self._install_fake_http(monkeypatch)
+        run(["generate", "-s", "words", "-n", "20"], db_path)
+        capsys.readouterr()
+        import tgnames.webcheck as webcheck
+        real_calibrate = webcheck.WebChecker.calibrate
+
+        def calibrate_then_degrade(self, on_sample=None):
+            result = real_calibrate(self, on_sample=on_sample)
+            opener.default = DEGRADED_PAGE
+            opener.pages.clear()
+            return result
+
+        monkeypatch.setattr(webcheck.WebChecker, "calibrate", calibrate_then_degrade)
+        assert run(["scan", "--web", "--delay", "0", "-n", "20"], db_path) == 1
+        assert "Stopped:" in capsys.readouterr().err
+        with Storage(db_path) as db:
+            assert not [c for c in db.all_by_status() if c.status == "available"]
+
+    def test_extra_controls_are_passed_through(self, monkeypatch, db_path, capsys):
+        from tests.test_webcheck import RICH_PAGE
+        opener = self._install_fake_http(monkeypatch, extra={"mine": RICH_PAGE})
+        assert run(["scan", "--web", "--calibrate-only", "--delay", "0",
+                    "--control", "mine"], db_path) == 0
+        assert "mine" in opener.requested
 
 
 class TestMark:

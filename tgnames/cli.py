@@ -218,7 +218,7 @@ def cmd_scan(args) -> int:
 
 def cmd_scan_web(args) -> int:
     """Check availability through public t.me pages — no api_id needed."""
-    from .webcheck import CalibrationError, WebAvailability, WebChecker
+    from .webcheck import CalibrationError, TrustLost, WebAvailability, WebChecker
 
     cfg = load_config(args.config)
     min_score = args.min_score if args.min_score is not None else cfg.selection.min_score
@@ -228,7 +228,7 @@ def cmd_scan_web(args) -> int:
     }
 
     with _open_db(args) as db:
-        checker = WebChecker(delay=args.delay)
+        checker = WebChecker(delay=args.delay, extra_controls=tuple(args.control or ()))
 
         print("Calibrating against handles whose state is known...")
         def show(handle, expected, features):
@@ -259,7 +259,13 @@ def cmd_scan_web(args) -> int:
               f"(1 request per {args.delay:g}s)")
         tally: dict[str, int] = {}
         for cand in queue:
-            result = checker.check(cand.username)
+            try:
+                result = checker.check(cand.username)
+            except TrustLost as exc:
+                print(f"\nStopped: {exc}", file=sys.stderr)
+                print("Verdicts already stored are the ones taken while "
+                      "calibration still held.", file=sys.stderr)
+                return 1
             tally[result.availability.value] = tally.get(result.availability.value, 0) + 1
             status = status_for.get(result.availability)
             if status:
@@ -275,6 +281,9 @@ def cmd_scan_web(args) -> int:
             print(f"  [{mark:>8}] @{cand.username}  ({cand.score:.1f} {cand.tier}){extra}")
 
         print("\nresult: " + ", ".join(f"{k}={v}" for k, v in sorted(tally.items())))
+        if tally.get("unknown"):
+            print(f"{tally['unknown']} handle(s) could not be judged and stay "
+                  f"queued — they are NOT free, just unknown.")
         print("Note: these answers come from public pages, not the API. "
               "`claim` re-checks through the API before creating anything.")
     return 0
@@ -542,8 +551,12 @@ def build_parser() -> argparse.ArgumentParser:
                         "(no api_id needed, weaker answers)")
     s.add_argument("--calibrate-only", action="store_true",
                    help="with --web: only prove the checker works, check nothing")
-    s.add_argument("--delay", type=float, default=1.5,
-                   help="with --web: seconds between requests (default 1.5)")
+    s.add_argument("--delay", type=float, default=2.0,
+                   help="with --web: seconds between requests (default 2.0)")
+    s.add_argument("--control", action="append", metavar="HANDLE",
+                   help="with --web: extra handle you know is taken, used to "
+                        "prove the checker before it judges anything "
+                        "(repeatable)")
     s.set_defaults(func=cmd_scan)
 
     c = sub.add_parser("claim", help="hold free usernames by creating channels")
@@ -569,7 +582,8 @@ def build_parser() -> argparse.ArgumentParser:
     h.add_argument("--web", action="store_true",
                    help="scan through t.me instead of the API")
     h.add_argument("--calibrate-only", action="store_true", help=argparse.SUPPRESS)
-    h.add_argument("--delay", type=float, default=1.5)
+    h.add_argument("--delay", type=float, default=2.0)
+    h.add_argument("--control", action="append")
     h.add_argument("--claim-limit", type=int, default=3,
                    help="how many handles to actually claim in this pass")
     h.add_argument("--execute", action="store_true")

@@ -1,19 +1,28 @@
 """Keyless availability probing through the public t.me pages.
 
 This is a fallback for when api_id/api_hash cannot be obtained. It only ever
-answers the question "is this handle occupied", never claims anything —
-creating a channel is impossible without the real API.
+answers "is this handle occupied" — claiming needs the real API.
 
-The catch is that Telegram does not document the markup of these pages and can
-change it at any time, so the classifier is not hard-coded. It is *learned* at
-runtime: the checker fetches a few handles whose state is known for certain
-(occupied ones like @durov, plus long random strings that cannot exist), works
-out which HTML signals actually separate the two groups, and refuses to
-classify anything at all if no signal separates them. A wrong answer is worse
-than no answer, so "unknown" is a first-class result.
+Correctness rule, learned the hard way: **a free verdict requires positive
+proof, never the absence of evidence.** Occupied handles render in many
+shapes (user with no avatar, bot, group, restricted channel), and a throttled
+or degraded response carries no markers at all. Concluding "free" from missing
+markers reports occupied handles as free, which is the one error that actually
+costs something.
 
-Standard library only, on purpose: this has to run on a machine where Telethon
-could not be installed.
+So the logic is inverted relative to the obvious approach:
+
+* every *free* handle renders the same canonical empty page, so that page's
+  exact feature set is learned as a signature. Matching it exactly -> FREE.
+* anything carrying a signal that a free page provably never carries -> TAKEN.
+* anything else -> UNKNOWN. Never a guess.
+
+Calibration proves all of that at runtime against handles whose state is
+certain, and is re-verified during a long scan so throttling kicking in
+mid-run is caught rather than silently turning every answer into "free".
+
+Standard library only, on purpose: this has to run where Telethon could not
+be installed.
 """
 
 from __future__ import annotations
@@ -33,13 +42,14 @@ USER_AGENT = (
 )
 BASE_URL = "https://t.me/"
 
-# Handles that are certainly occupied. Used only as calibration controls.
-CONTROL_TAKEN = ("durov", "telegram")
-# How many impossible-to-exist handles to use as the free-side controls.
+# Handles that are certainly occupied, chosen to span different page shapes
+# (person, broadcast channel, bot). More diversity here means the calibration
+# is proven against more of the variety it will meet.
+CONTROL_TAKEN = ("durov", "telegram", "botfather")
 CONTROL_FREE_COUNT = 3
 
-# Signals looked for in the page. Which of them actually discriminate is
-# decided by calibration, not by this list — extra entries cost nothing.
+# Signals looked for in a page. Which ones actually discriminate is decided by
+# calibration, not by this list, so extra entries are harmless.
 MARKERS = (
     "tgme_page_title",
     "tgme_page_extra",
@@ -47,13 +57,28 @@ MARKERS = (
     "tgme_page_description",
     "tgme_page_action",
     "tgme_page_context",
-    "tgme_head",
+    "tgme_page_additional",
+    "tgme_action_button",
+    "tgme_header_link",
+    "tgme_page",
     'property="og:title"',
     'property="og:description"',
     'property="og:image"',
-    "tgme_action_button",
-    "tgme_page_additional",
+    "tgme_icon_user",
+    "tgme_icon_group",
+    "tgme_icon_channel",
 )
+
+# A real t.me page is several kilobytes. Anything much smaller is an error or
+# throttle page, never a verdict — checked before the signature comparison,
+# because an empty page would otherwise match an empty free signature.
+MIN_PLAUSIBLE_BYTES = 600
+
+# Consecutive unusable answers that mean the run has stopped being trustworthy
+# (almost always throttling) rather than meeting a few odd pages.
+MAX_CONSECUTIVE_UNKNOWN = 4
+# Re-prove the calibration every this many checks during a long scan.
+RECHECK_EVERY = 25
 
 
 class WebAvailability(str, Enum):
@@ -72,77 +97,96 @@ class WebResult:
 
 
 class CalibrationError(RuntimeError):
-    """Raised when the t.me pages cannot be told apart — do not guess."""
+    """The pages cannot be told apart — refuse to answer rather than guess."""
+
+
+class TrustLost(RuntimeError):
+    """Mid-run the responses stopped matching calibration; stop the scan."""
 
 
 def random_handle(length: int = 20, rng: random.Random | None = None) -> str:
     """A handle long and random enough that it cannot plausibly be taken."""
     rng = rng or random.Random()
-    body = "".join(rng.choice(string.ascii_lowercase) for _ in range(length - 1))
-    return rng.choice(string.ascii_lowercase) + body
+    return "".join(rng.choice(string.ascii_lowercase) for _ in range(length))
+
+
+def size_bucket(html: str) -> str:
+    """Coarse size class. Keeps a truncated page from matching a real one."""
+    size = len(html)
+    if size < MIN_PLAUSIBLE_BYTES:
+        return "size:tiny"
+    if size < 8000:
+        return "size:small"
+    if size < 40000:
+        return "size:medium"
+    return "size:large"
 
 
 def extract_features(html: str) -> frozenset[str]:
-    """Reduce a page to the boolean signals calibration can reason about."""
+    """Reduce a page to the boolean signals calibration reasons about."""
     low = html.lower()
     found = {f"has:{m}" for m in MARKERS if m.lower() in low}
-    # Size is a coarse but often decisive signal.
-    found.add("size:large" if len(html) > 6000 else "size:small")
+    found.add(size_bucket(html))
     return frozenset(found)
 
 
 def extract_title(html: str) -> str:
-    match = re.search(
-        r'<meta[^>]+property="og:title"[^>]+content="([^"]*)"', html, re.I
-    )
+    match = re.search(r'<meta[^>]+property="og:title"[^>]+content="([^"]*)"', html, re.I)
     return match.group(1).strip() if match else ""
 
 
 @dataclass
 class Discriminator:
-    """The signals that were found to actually separate taken from free."""
+    """What calibration proved about free and occupied pages."""
 
-    taken_only: frozenset[str] = frozenset()
-    free_only: frozenset[str] = frozenset()
+    # Exact feature set every free page produced. FREE requires matching it.
+    free_signature: frozenset[str] | None = None
+    # Signals seen on occupied pages and never on a free one.
+    taken_evidence: frozenset[str] = frozenset()
     samples: int = 0
 
     def usable(self) -> bool:
-        return bool(self.taken_only or self.free_only)
+        return self.free_signature is not None and bool(self.taken_evidence)
 
     def classify(self, features: frozenset[str]) -> WebAvailability:
-        if self.taken_only and self.taken_only & features:
+        if not self.usable():
+            return WebAvailability.UNKNOWN
+        # Positive proof of occupancy wins: a page carrying a signal that free
+        # pages never carry is occupied, whatever else it looks like.
+        if features & self.taken_evidence:
             return WebAvailability.TAKEN
-        if self.free_only and self.free_only & features:
+        # Free only on an exact match with the proven-canonical empty page.
+        if features == self.free_signature:
             return WebAvailability.FREE
-        # Only one side was learned: absence of its markers implies the other.
-        if self.taken_only and not self.free_only:
-            return WebAvailability.FREE
-        if self.free_only and not self.taken_only:
-            return WebAvailability.TAKEN
+        # Neither — an unfamiliar page. Say so instead of picking a side.
         return WebAvailability.UNKNOWN
 
     def describe(self) -> str:
-        parts = []
-        if self.taken_only:
-            parts.append("occupied pages carry " + ", ".join(sorted(self.taken_only)))
-        if self.free_only:
-            parts.append("free pages carry " + ", ".join(sorted(self.free_only)))
-        return "; ".join(parts) or "nothing separates the two groups"
+        if not self.usable():
+            return "nothing separates the two groups"
+        free = ", ".join(sorted(self.free_signature)) or "no signals at all"
+        return (
+            f"free pages look exactly like [{free}]; "
+            f"{len(self.taken_evidence)} signal(s) prove occupancy"
+        )
 
 
 class WebChecker:
-    def __init__(self, delay: float = 1.5, timeout: float = 15.0,
-                 opener=None, rng: random.Random | None = None):
+    def __init__(self, delay: float = 2.0, timeout: float = 15.0,
+                 opener=None, rng: random.Random | None = None,
+                 extra_controls: tuple[str, ...] = ()):
         self.delay = delay
         self.timeout = timeout
         self.rng = rng or random.Random()
         self._opener = opener or urllib.request.build_opener()
         self._last_request = 0.0
         self.discriminator = Discriminator()
+        self.controls_taken = tuple(CONTROL_TAKEN) + tuple(extra_controls)
+        self._checks_since_recheck = 0
+        self._consecutive_unknown = 0
 
     # -- transport ----------------------------------------------------------
     def fetch(self, username: str) -> str:
-        """GET the public page for a handle. Raises urllib errors."""
         wait = self.delay - (time.monotonic() - self._last_request)
         if wait > 0:
             time.sleep(wait)
@@ -155,10 +199,10 @@ class WebChecker:
 
     # -- calibration --------------------------------------------------------
     def calibrate(self, on_sample=None) -> Discriminator:
-        """Learn the discriminator from handles whose state is already known."""
+        """Prove, against handles of known state, that verdicts are possible."""
         taken_features, free_features = [], []
 
-        for handle in CONTROL_TAKEN:
+        for handle in self.controls_taken:
             features = extract_features(self.fetch(handle))
             taken_features.append(features)
             if on_sample:
@@ -171,40 +215,113 @@ class WebChecker:
             if on_sample:
                 on_sample(handle, "free", features)
 
-        common_taken = frozenset.intersection(*taken_features)
-        common_free = frozenset.intersection(*free_features)
-        any_taken = frozenset.union(*taken_features)
-        any_free = frozenset.union(*free_features)
+        # 0. Nothing implausibly short can take part in calibration.
+        if "size:tiny" in frozenset().union(*taken_features, *free_features):
+            raise CalibrationError(
+                "t.me returned implausibly short pages, which means throttling "
+                "or a blocked connection rather than real content. Wait, or "
+                "raise --delay."
+            )
+
+        # 1. Every free page must render identically, or there is no signature.
+        signature = free_features[0]
+        if any(f != signature for f in free_features):
+            raise CalibrationError(
+                "Handles that cannot exist returned pages that differ from each "
+                "other, so there is no reliable 'free' page to compare against. "
+                "This usually means t.me is throttling the requests — wait, or "
+                "raise --delay."
+            )
+
+        # 2. Occupied pages must be distinguishable from that signature.
+        identical = [
+            handle for handle, f in zip(self.controls_taken, taken_features)
+            if f == signature
+        ]
+        if identical:
+            raise CalibrationError(
+                f"Occupied handles ({', '.join('@' + h for h in identical)}) "
+                f"render exactly like a free handle, so occupancy cannot be "
+                f"detected. Refusing to guess — use the API (scan without --web)."
+            )
+
+        evidence = frozenset().union(*taken_features) - signature
+        if not evidence:
+            raise CalibrationError(
+                "No signal appears on occupied pages that is absent from free "
+                "ones. Telegram most likely changed the page markup. Refusing "
+                "to guess — use the API (scan without --web)."
+            )
 
         self.discriminator = Discriminator(
-            taken_only=common_taken - any_free,
-            free_only=common_free - any_taken,
+            free_signature=signature,
+            taken_evidence=evidence,
             samples=len(taken_features) + len(free_features),
         )
-        if not self.discriminator.usable():
-            raise CalibrationError(
-                "The occupied and free t.me pages look identical to this "
-                "checker, so it cannot tell them apart. Telegram most likely "
-                "changed the page markup. Refusing to guess — use the API "
-                "(scan without --web) instead."
-            )
+        self._checks_since_recheck = 0
+        self._consecutive_unknown = 0
         return self.discriminator
+
+    def _reverify(self) -> None:
+        """Confirm a known-free handle still matches the learned signature."""
+        html = self.fetch(random_handle(rng=self.rng))
+        if len(html) < MIN_PLAUSIBLE_BYTES or (
+            extract_features(html) != self.discriminator.free_signature
+        ):
+            raise TrustLost(
+                "A handle that cannot exist no longer renders like the one "
+                "calibration learned — t.me has almost certainly started "
+                "throttling. Stopping so that no unreliable verdict is stored. "
+                "Wait a while and re-run, or raise --delay."
+            )
+        self._checks_since_recheck = 0
 
     # -- checking -----------------------------------------------------------
     def check(self, username: str) -> WebResult:
         if not self.discriminator.usable():
             raise CalibrationError("calibrate() must succeed before checking")
+
+        if self._checks_since_recheck >= RECHECK_EVERY:
+            self._reverify()
+
         try:
             html = self.fetch(username)
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
-                return WebResult(username, WebAvailability.FREE, "404 from t.me")
-            return WebResult(username, WebAvailability.ERROR, f"HTTP {exc.code}")
+                result = WebResult(username, WebAvailability.FREE, "404 from t.me")
+                self._consecutive_unknown = 0
+                self._checks_since_recheck += 1
+                return result
+            if exc.code == 429:
+                raise TrustLost(
+                    "t.me answered 429 (too many requests). Stopping; wait a "
+                    "while and re-run, or raise --delay."
+                ) from exc
+            return self._unusable(username, f"HTTP {exc.code}")
         except (urllib.error.URLError, OSError, TimeoutError) as exc:
-            return WebResult(username, WebAvailability.ERROR, str(exc))
+            return self._unusable(username, str(exc))
 
+        self._checks_since_recheck += 1
+        if len(html) < MIN_PLAUSIBLE_BYTES:
+            return self._unusable(
+                username, f"implausibly short response ({len(html)} bytes)"
+            )
         availability = self.discriminator.classify(extract_features(html))
+        if availability is WebAvailability.UNKNOWN:
+            return self._unusable(username, "page matches neither profile")
+
+        self._consecutive_unknown = 0
         return WebResult(
-            username, availability,
-            detail="via t.me page", title=extract_title(html),
+            username, availability, detail="via t.me page", title=extract_title(html)
         )
+
+    def _unusable(self, username: str, detail: str) -> WebResult:
+        """Record a non-answer, and stop the run if they start piling up."""
+        self._consecutive_unknown += 1
+        if self._consecutive_unknown >= MAX_CONSECUTIVE_UNKNOWN:
+            raise TrustLost(
+                f"{self._consecutive_unknown} unusable responses in a row "
+                f"({detail}). t.me is almost certainly throttling. Stopping so "
+                f"that no unreliable verdict is stored — wait, or raise --delay."
+            )
+        return WebResult(username, WebAvailability.UNKNOWN, detail)
