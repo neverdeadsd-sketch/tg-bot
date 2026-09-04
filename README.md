@@ -72,6 +72,27 @@ python run.py login
 Команда `analyze` работает и без ключей — она полностью офлайновая. Ключи
 нужны только для `scan`, `claim`, `hunt`, `login` и `inventory`.
 
+### Если мало места на диске
+
+Половина инструмента вообще не нуждается в зависимостях — только стандартная
+библиотека Python. Без venv и без `pip install` работают:
+
+`analyze`, `generate`, `list`, `stats`, `export` и `claim` без `--execute`.
+
+Это ~1.3 МБ на репозиторий и ноль сверху:
+
+```powershell
+git clone -b claude/telegram-username-analyzer-bot-8ks7fm https://github.com/neverdeadsd-sketch/tg-bot.git
+cd tg-bot
+python run.py analyze money
+python run.py generate -s all -n 500
+python run.py claim -n 3          # dry-run, покажет что занял бы
+```
+
+Telethon (≈58 МБ вместе с venv) нужен только чтобы реально ходить в Telegram:
+`scan`, `claim --execute`, `hunt`, `login`, `inventory`. Без него эти команды
+не падают трейсбеком, а объясняют, чего не хватает.
+
 ## Быстрый старт
 
 ```bash
@@ -234,7 +255,7 @@ tgnames/
   config.py      TOML + переменные окружения
   cli.py         командный интерфейс
   data/          словари, аффиксы, стоп-листы
-tests/           113 тестов, Telegram замокан — аккаунт не нужен
+tests/           123 теста, Telegram замокан — аккаунт не нужен
 ```
 
 ## Тесты

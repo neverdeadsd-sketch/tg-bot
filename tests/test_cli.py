@@ -1,6 +1,7 @@
 """End-to-end tests of the offline CLI paths (no Telegram account involved)."""
 
 import json
+import sys
 
 import pytest
 
@@ -137,3 +138,50 @@ class TestReporting:
         capsys.readouterr()
         run(["list", "--status", STATUS_AVAILABLE], db_path)
         assert len(capsys.readouterr().out.strip().splitlines()) == 3  # header, rule, row
+
+
+def _hide_telethon(monkeypatch):
+    """Make `import telethon` fail, as it does on a machine without the dep."""
+    import tgnames
+
+    for name in [m for m in list(sys.modules) if m == "telethon" or m.startswith("telethon.")]:
+        monkeypatch.delitem(sys.modules, name)
+    monkeypatch.delitem(sys.modules, "tgnames.client", raising=False)
+    # `from . import client` short-circuits on the cached package attribute.
+    monkeypatch.delattr(tgnames, "client", raising=False)
+    monkeypatch.setitem(sys.modules, "telethon", None)
+
+
+class TestWithoutTelethon:
+    """The offline half of the tool must run with zero dependencies."""
+
+    @pytest.mark.parametrize("argv", [
+        ["analyze", "money"],
+        ["generate", "-s", "words", "-n", "3"],
+        ["list"],
+        ["stats"],
+        ["export", "--format", "json"],
+    ])
+    def test_offline_commands_still_work(self, monkeypatch, db_path, argv):
+        _hide_telethon(monkeypatch)
+        assert run(argv, db_path) == 0
+
+    def test_dry_run_claim_needs_no_telethon(self, monkeypatch, db_path, capsys):
+        _hide_telethon(monkeypatch)
+        assert run(["claim", "money"], db_path) == 0
+        out = capsys.readouterr().out
+        assert "DRY RUN" in out and "quota left" in out
+
+    @pytest.mark.parametrize("argv", [
+        ["scan", "-n", "1"],
+        ["claim", "money", "--execute", "-y"],
+        ["login"],
+        ["inventory"],
+    ])
+    def test_online_commands_explain_the_missing_dependency(self, monkeypatch, db_path, argv):
+        _hide_telethon(monkeypatch)
+        with pytest.raises(SystemExit) as exc:
+            run(argv, db_path)
+        message = str(exc.value)
+        assert "Telethon" in message and "pip install -r requirements.txt" in message
+        assert "Traceback" not in message

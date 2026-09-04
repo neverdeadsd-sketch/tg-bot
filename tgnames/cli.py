@@ -62,6 +62,20 @@ def _print_table(rows: list[tuple], headers: tuple[str, ...]) -> None:
         print("  ".join(str(c).ljust(widths[i]) for i, c in enumerate(row)))
 
 
+def _load_client():
+    """Import the Telegram layer, explaining the fix if the dep is missing."""
+    try:
+        from . import client
+    except ImportError as exc:  # telethon absent
+        raise SystemExit(
+            f"This command needs Telethon, which is not installed ({exc}).\n"
+            f"  pip install -r requirements.txt\n"
+            f"Offline commands (analyze, generate, list, stats, export, and "
+            f"claim without --execute) work without it."
+        ) from exc
+    return client
+
+
 def _open_db(args) -> Storage:
     cfg = load_config(args.config)
     return Storage(args.db or cfg.db)
@@ -157,9 +171,10 @@ def cmd_generate(args) -> int:
 
 def cmd_scan(args) -> int:
     """Check queued candidates against Telegram."""
-    from .client import StopRun, UsernameHunter
+    client = _load_client()
     from .ratelimit import QuotaExceeded
 
+    StopRun, UsernameHunter = client.StopRun, client.UsernameHunter
     cfg = load_config(args.config)
     min_score = args.min_score if args.min_score is not None else cfg.selection.min_score
 
@@ -200,8 +215,7 @@ def cmd_scan(args) -> int:
 
 def cmd_claim(args) -> int:
     """Claim free usernames by creating a channel for each one."""
-    from .client import StopRun, UsernameHunter
-    from .ratelimit import QuotaExceeded
+    from .ratelimit import Quota, QuotaExceeded
 
     cfg = load_config(args.config)
     min_score = args.min_score if args.min_score is not None else cfg.selection.min_score
@@ -229,8 +243,11 @@ def cmd_claim(args) -> int:
                 print("nothing available to claim — run `scan` first")
                 return 0
 
-            hunter = UsernameHunter(cfg, db)
-            left_h, left_d = hunter.claim_quota.remaining()
+            # Read the quota straight from storage: a dry run must stay
+            # dependency-free, so the Telegram layer is imported only below.
+            left_h, left_d = Quota(
+                db, "claim", cfg.limits.claims_per_hour, cfg.limits.claims_per_day
+            ).remaining()
             print(f"{'DRY RUN' if dry_run else 'LIVE'}: {len(queue)} candidate(s); "
                   f"quota left {left_h}/hour, {left_d}/day")
             for c in queue:
@@ -241,6 +258,10 @@ def cmd_claim(args) -> int:
                 print("Each claim creates a PUBLIC channel on your account and is "
                       "counted against Telegram's public-link limit.")
                 return 0
+
+            client = _load_client()
+            StopRun, UsernameHunter = client.StopRun, client.UsernameHunter
+            hunter = UsernameHunter(cfg, db)
 
             if not args.yes:
                 print(f"\nThis will create {len(queue)} public channel(s) on your account.")
@@ -349,7 +370,7 @@ def cmd_export(args) -> int:
 
 def cmd_login(args) -> int:
     """Interactive first login — creates the Telethon session file."""
-    from .client import UsernameHunter
+    UsernameHunter = _load_client().UsernameHunter
 
     cfg = load_config(args.config)
 
@@ -367,7 +388,7 @@ def cmd_login(args) -> int:
 
 def cmd_inventory(args) -> int:
     """List public channels this account owns, i.e. the handles already held."""
-    from .client import UsernameHunter
+    UsernameHunter = _load_client().UsernameHunter
 
     cfg = load_config(args.config)
 
