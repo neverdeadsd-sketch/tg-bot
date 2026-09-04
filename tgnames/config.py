@@ -50,7 +50,9 @@ class SelectionConfig:
     min_score: float = 60.0
     # Never touch handles carrying these tags.
     exclude_tags: list[str] = field(
-        default_factory=lambda: ["reserved", "reserved-part", "risky", "noise"]
+        default_factory=lambda: [
+            "reserved", "reserved-part", "risky", "noise", "likely-reserved",
+        ]
     )
 
 

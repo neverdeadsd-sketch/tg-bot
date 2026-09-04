@@ -411,12 +411,14 @@ def analyze(username: str) -> Valuation:
         score *= 1.05
         tags.append("letter-number")
 
-    # Telegram holds back short, meaningful words and sells them through the
-    # Fragment auction rather than handing them out. They have no owner, so
-    # every page-based check reports them as free while they cannot be taken.
-    # This is a strong prior, not a fact about a specific handle, so it is a
-    # tag the user can weigh — never a verdict.
-    if len(u) <= 6 and u.isalpha() and lex_raw >= 80:
+    # Telegram holds back short and meaningful handles and sells them through
+    # the Fragment auction rather than handing them out. They have no owner, so
+    # every page-based check reports them as free while the client rejects them
+    # with "This link is invalid". The five-character space in particular is
+    # exhausted: a scan of twenty such handles found none that could be taken.
+    # This is a prior about a class of handles, not a fact about any specific
+    # one, so it is a tag the user can weigh — never a verdict.
+    if len(u) == MIN_LENGTH or (len(u) <= 6 and u.isalpha() and lex_raw >= 80):
         tags.append("likely-reserved")
         reasons.append(
             "short dictionary word — Telegram usually reserves these for the "

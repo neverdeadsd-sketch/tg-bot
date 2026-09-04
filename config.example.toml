@@ -28,4 +28,7 @@ delete_on_failure = true         # remove the channel if the username fails to a
 
 [selection]
 min_score = 60.0                 # only work on candidates scoring at least this
-exclude_tags = ["reserved", "reserved-part", "risky", "noise"]
+# likely-reserved covers handles Telegram auctions rather than gives away
+# (all 5-character ones, and short dictionary words). Drop it from this list
+# to work on them anyway — expect "This link is invalid" in the client.
+exclude_tags = ["reserved", "reserved-part", "risky", "noise", "likely-reserved"]

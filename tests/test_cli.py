@@ -59,7 +59,7 @@ class TestGenerate:
             assert sum(db.stats().values()) == 10
 
     def test_keeps_the_highest_scoring(self, db_path):
-        run(["generate", "-s", "words", "-n", "5"], db_path)
+        run(["generate", "-s", "words", "-n", "5", "--no-filter"], db_path)
         with Storage(db_path) as db:
             scores = [c.score for c in db.all_by_status()]
         assert scores == sorted(scores, reverse=True)
@@ -72,14 +72,27 @@ class TestGenerate:
 
     def test_excludes_risky_tags_by_default(self, tmp_path, db_path):
         src = tmp_path / "seed.txt"
-        src.write_text("telegram\nmoney\n", encoding="utf-8")
+        src.write_text("telegram\ngoldbank\n", encoding="utf-8")
         run(["generate", "-f", str(src), "--min-score", "0"], db_path)
         with Storage(db_path) as db:
-            assert [c.username for c in db.all_by_status()] == ["money"]
+            assert [c.username for c in db.all_by_status()] == ["goldbank"]
+
+    def test_excludes_reserved_handles_by_default(self, tmp_path, db_path):
+        """Five-character handles are auctioned, not given away."""
+        src = tmp_path / "seed.txt"
+        src.write_text("elite\ngoldbank\n", encoding="utf-8")
+        run(["generate", "-f", str(src), "--min-score", "0"], db_path)
+        with Storage(db_path) as db:
+            assert [c.username for c in db.all_by_status()] == ["goldbank"]
+
+    def test_min_length_filters(self, db_path):
+        run(["generate", "-s", "all", "-n", "40", "--min-length", "8"], db_path)
+        with Storage(db_path) as db:
+            assert all(len(c.username) >= 8 for c in db.all_by_status())
 
     def test_no_filter_keeps_them(self, tmp_path, db_path):
         src = tmp_path / "seed.txt"
-        src.write_text("telegram\nmoney\n", encoding="utf-8")
+        src.write_text("telegram\ngoldbank\n", encoding="utf-8")
         run(["generate", "-f", str(src), "--min-score", "0", "--no-filter"], db_path)
         with Storage(db_path) as db:
             assert len(db.all_by_status()) == 2
@@ -195,7 +208,7 @@ class TestScanWeb:
         import tgnames.webcheck as webcheck
 
         pages = dict(CONTROLS)
-        pages["level"] = RICH_PAGE
+        pages["goldbank"] = RICH_PAGE
         pages.update(extra or {})
         opener = FakeOpener(pages, default if default is not None else FREE_PAGE)
         monkeypatch.setattr(
@@ -206,23 +219,23 @@ class TestScanWeb:
     def test_runs_without_telethon(self, monkeypatch, db_path, capsys):
         self._install_fake_http(monkeypatch)
         _hide_telethon(monkeypatch)
-        run(["generate", "-s", "words", "-n", "3"], db_path)
+        run(["mark", "goldbank", "vaultpay", "--status", "new"], db_path)
         capsys.readouterr()
         assert run(["scan", "--web", "--delay", "0", "-n", "3"], db_path) == 0
         out = capsys.readouterr().out
         assert "Calibrated on 6 pages" in out
-        assert "taken" in out or "FREE" in out
+        assert "taken" in out and "no owner" in out
 
     def test_writes_statuses_with_provenance(self, monkeypatch, db_path, capsys):
         self._install_fake_http(monkeypatch)
-        run(["generate", "-s", "words", "-n", "3"], db_path)
+        run(["mark", "goldbank", "--status", "new"], db_path)
         run(["scan", "--web", "--delay", "0", "-n", "3"], db_path)
         capsys.readouterr()
         with Storage(db_path) as db:
-            level = db.get("level")
-            assert level.status == "taken"
-            assert level.note == "via t.me page: owner visible"
-            assert level.checked_at is not None
+            row = db.get("goldbank")
+            assert row.status == "taken"
+            assert row.note == "via t.me page: owner visible"
+            assert row.checked_at is not None
 
     def test_calibrate_only_checks_nothing(self, monkeypatch, db_path, capsys):
         opener = self._install_fake_http(monkeypatch)
@@ -251,7 +264,7 @@ class TestScanWeb:
         self._install_fake_http(monkeypatch)
         run(["mark", "elite", "--status", "new"], db_path)
         capsys.readouterr()
-        run(["scan", "--web", "--delay", "0", "-n", "5"], db_path)
+        run(["scan", "--web", "--delay", "0", "-n", "5", "--include-reserved"], db_path)
         out = capsys.readouterr().out
         with Storage(db_path) as db:
             row = db.get("elite")
@@ -263,18 +276,19 @@ class TestScanWeb:
     def test_unknown_verdicts_stay_queued(self, monkeypatch, db_path, capsys):
         """An unjudgeable handle must never be recorded as available."""
         from tests.test_webcheck import STRANGE_PAGE
-        self._install_fake_http(monkeypatch, extra={"radar": STRANGE_PAGE})
-        run(["generate", "-s", "words", "-n", "3"], db_path)
+        self._install_fake_http(monkeypatch, extra={"vaultpay": STRANGE_PAGE})
+        run(["mark", "vaultpay", "--status", "new"], db_path)
+        capsys.readouterr()
         run(["scan", "--web", "--delay", "0", "-n", "3"], db_path)
         out = capsys.readouterr().out
         assert "NOT free, just unknown" in out
         with Storage(db_path) as db:
-            assert db.get("radar").status == "new"
+            assert db.get("vaultpay").status == "new"
 
     def test_throttling_stops_the_run(self, monkeypatch, db_path, capsys):
         from tests.test_webcheck import DEGRADED_PAGE
         opener = self._install_fake_http(monkeypatch)
-        run(["generate", "-s", "words", "-n", "20"], db_path)
+        run(["generate", "-s", "compounds", "-n", "20"], db_path)
         capsys.readouterr()
         import tgnames.webcheck as webcheck
         real_calibrate = webcheck.WebChecker.calibrate
@@ -338,3 +352,57 @@ class TestMark:
     def test_works_without_telethon(self, monkeypatch, db_path):
         _hide_telethon(monkeypatch)
         assert run(["mark", "money"], db_path) == 0
+
+
+class TestRescore:
+    def test_refreshes_stale_scores_and_tags(self, db_path, capsys):
+        """A scoring change must be able to reach rows already stored."""
+        import json
+        import sqlite3
+
+        run(["generate", "-s", "words", "-n", "5", "--no-filter"], db_path)
+        with sqlite3.connect(db_path) as con:
+            con.execute("UPDATE candidates SET score=1.0, tags='[]'")
+        capsys.readouterr()
+
+        assert run(["rescore"], db_path) == 0
+        assert "changed" in capsys.readouterr().out
+        with Storage(db_path) as db:
+            for row in db.all_by_status():
+                assert row.score > 1.0
+                assert row.tags
+
+    def test_reports_newly_added_tags(self, db_path, capsys):
+        import json
+        import sqlite3
+
+        run(["mark", "elite", "--status", "new"], db_path)
+        with sqlite3.connect(db_path) as con:
+            con.execute("UPDATE candidates SET tags=? WHERE username='elite'",
+                        (json.dumps(["premium"]),))
+        capsys.readouterr()
+        run(["rescore"], db_path)
+        assert "+likely-reserved" in capsys.readouterr().out
+
+    def test_works_without_telethon(self, monkeypatch, db_path):
+        _hide_telethon(monkeypatch)
+        run(["mark", "goldbank", "--status", "new"], db_path)
+        assert run(["rescore"], db_path) == 0
+
+
+class TestStatsByLength:
+    def test_breaks_results_down_by_length(self, db_path, capsys):
+        run(["mark", "elite", "--status", "invalid"], db_path)
+        run(["mark", "goldbank", "--status", "taken"], db_path)
+        run(["mark", "vaultpay", "--status", "unclaimed"], db_path)
+        capsys.readouterr()
+        run(["stats"], db_path)
+        out = capsys.readouterr().out
+        assert "checked handles by length" in out
+        assert "API-confirmed" in out
+        # Length 5 exhausted, length 8 still has unverified candidates.
+        lines = [l.split() for l in out.splitlines() if l.strip().startswith(("5 ", "8 "))]
+        by_length = {int(l[0]): l for l in lines}
+        assert by_length[5][3] == "1"   # reserved
+        assert by_length[8][2] == "1"   # taken
+        assert by_length[8][4] == "1"   # no owner

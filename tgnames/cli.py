@@ -143,6 +143,8 @@ def cmd_generate(args) -> int:
         if username in seen:
             continue
         seen.add(username)
+        if len(username) < args.min_length:
+            continue
         v = analyze(username)
         if not v.valid or v.score < min_score:
             continue
@@ -183,12 +185,15 @@ def cmd_scan(args) -> int:
 
     async def run() -> int:
         with _open_db(args) as db:
+            excluded = [t for t in cfg.selection.exclude_tags
+                        if not (args.include_reserved and t == "likely-reserved")]
             queue = db.queue(
                 STATUS_NEW, args.limit, min_score=min_score,
-                exclude_tags=tuple(cfg.selection.exclude_tags),
+                exclude_tags=tuple(excluded),
             )
             if not queue:
-                print("queue is empty — run `generate` first, or lower --min-score")
+                print("queue is empty — run `generate` first, lower --min-score, "
+                      "or pass --include-reserved")
                 return 0
             print(f"checking {len(queue)} candidates "
                   f"(score >= {min_score}, ~{cfg.limits.checks_per_minute:.0f}/min)")
@@ -251,12 +256,15 @@ def cmd_scan_web(args) -> int:
             print("Calibration succeeded — the checker can tell the two apart.")
             return 0
 
+        excluded = [t for t in cfg.selection.exclude_tags
+                    if not (args.include_reserved and t == "likely-reserved")]
         queue = db.queue(
             storage.STATUS_NEW, args.limit, min_score=min_score,
-            exclude_tags=tuple(cfg.selection.exclude_tags),
+            exclude_tags=tuple(excluded),
         )
         if not queue:
-            print("queue is empty — run `generate` first, or lower --min-score")
+            print("queue is empty — run `generate` first, lower --min-score, "
+                  "or pass --include-reserved")
             return 0
 
         print(f"checking {len(queue)} candidates via t.me "
@@ -283,7 +291,10 @@ def cmd_scan_web(args) -> int:
                 db.log("webcheck", cand.username, f"{result.availability.value}: {result.detail}")
             mark = {"available": "no owner", "taken": "taken",
                     "unknown": " unknown", "error": "   error"}[result.availability.value]
-            if result.availability is WebAvailability.FREE and "likely-reserved" in cand.tags:
+            # Score afresh: tags stored by an older run can predate a change
+            # to the scorer, and a stale tag would hide the warning.
+            if (result.availability is WebAvailability.FREE
+                    and "likely-reserved" in analyze(cand.username).tags):
                 mark = "reserved?"
             extra = f"  {result.title[:40]}" if result.title else ""
             print(f"  [{mark:>9}] @{cand.username}  ({cand.score:.1f} {cand.tier}){extra}")
@@ -297,7 +308,7 @@ def cmd_scan_web(args) -> int:
                   f"queued — they are NOT free, just unknown.")
 
         reserved = [c for c in db.all_by_status(storage.STATUS_UNCLAIMED, 10000)
-                    if "likely-reserved" in c.tags]
+                    if "likely-reserved" in analyze(c.username).tags]
         print("\nIMPORTANT: 'no owner visible' is not the same as claimable. "
               "Telegram keeps short\nmeaningful words (elite, money, level ...) "
               "for the Fragment auction — they have no\nowner, so a page check "
@@ -436,6 +447,33 @@ def cmd_mark(args) -> int:
     return 0
 
 
+def cmd_rescore(args) -> int:
+    """Re-analyse stored candidates so their score and tags are current.
+
+    Scores and tags are written when a candidate is generated, so a change to
+    the scorer leaves existing rows stale — including the tags the selection
+    filters act on.
+    """
+    with _open_db(args) as db:
+        rows = db.all_by_status(args.status, args.limit)
+        changed = []
+        for row in rows:
+            fresh = analyze(row.username)
+            if not fresh.valid:
+                continue
+            if (abs(fresh.score - row.score) > 0.01
+                    or sorted(fresh.tags) != sorted(row.tags)):
+                changed.append((row, fresh))
+        db.upsert_many([analyze(r.username) for r in rows], source="rescore")
+
+        print(f"re-scored {len(rows)} candidate(s); {len(changed)} changed")
+        for row, fresh in changed[:args.show]:
+            added = sorted(set(fresh.tags) - set(row.tags))
+            note = f"  +{','.join(added)}" if added else ""
+            print(f"  @{row.username:<20} {row.score:6.2f} -> {fresh.score:6.2f}{note}")
+    return 0
+
+
 def cmd_list(args) -> int:
     with _open_db(args) as db:
         items = db.all_by_status(args.status, args.limit)
@@ -463,6 +501,41 @@ def cmd_stats(args) -> int:
         ):
             left_h, left_d = Quota(db, name, per_h, per_d).remaining()
             print(f"quota {name}: {left_h}/{per_h} left this hour, {left_d}/{per_d} left today")
+        rows = [c for c in db.all_by_status(None, 1000000)
+                if c.status in (storage.STATUS_AVAILABLE, storage.STATUS_UNCLAIMED,
+                                storage.STATUS_TAKEN, storage.STATUS_PURCHASABLE,
+                                storage.STATUS_INVALID)]
+        if rows:
+            # Keep the columns apart on purpose: lumping "no owner visible"
+            # in with confirmed-free is exactly the confusion that made
+            # reserved handles look obtainable.
+            print("\nchecked handles by length:")
+            by_length: dict[int, list] = {}
+            for row in rows:
+                by_length.setdefault(len(row.username), []).append(row)
+            table = []
+            for length in sorted(by_length):
+                group = by_length[length]
+                counts = {
+                    "taken": sum(c.status == storage.STATUS_TAKEN for c in group),
+                    "reserved": sum(c.status in (storage.STATUS_PURCHASABLE,
+                                                 storage.STATUS_INVALID)
+                                    for c in group),
+                    "no owner": sum(c.status == storage.STATUS_UNCLAIMED
+                                    for c in group),
+                    "free": sum(c.status == storage.STATUS_AVAILABLE
+                                for c in group),
+                }
+                table.append((length, len(group), counts["taken"],
+                              counts["reserved"], counts["no owner"],
+                              counts["free"]))
+            _print_table(table, ("length", "checked", "taken", "reserved",
+                                 "no owner", "free"))
+            print("'free' is API-confirmed; 'no owner' only means no page was "
+                  "served, which\nreserved handles also manage. Use this to "
+                  "pick --min-length: a band with no\nconfirmed-free results "
+                  "is spending requests for nothing.")
+
         events = db.recent_events(args.events)
         if events:
             print("\nrecent events:")
@@ -568,6 +641,9 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("-n", "--limit", type=int, default=500, help="how many to keep")
     g.add_argument("--max-scan", type=int, default=400000, help="candidate cap per run")
     g.add_argument("--min-score", type=float)
+    g.add_argument("--min-length", type=int, default=0,
+                   help="skip handles shorter than this; short ones are "
+                        "overwhelmingly reserved or taken")
     g.add_argument("--no-filter", action="store_true", help="ignore exclude_tags")
     g.add_argument("--show", type=int, default=15, help="how many to print")
     g.add_argument("--seed", type=int)
@@ -583,6 +659,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="with --web: only prove the checker works, check nothing")
     s.add_argument("--delay", type=float, default=2.0,
                    help="with --web: seconds between requests (default 2.0)")
+    s.add_argument("--include-reserved", action="store_true",
+                   help="also check handles tagged likely-reserved "
+                        "(all 5-character ones and short dictionary words); "
+                        "they are skipped by default because they are "
+                        "auctioned rather than given away")
     s.add_argument("--control", action="append", metavar="HANDLE",
                    help="with --web: extra handle you know is taken, used to "
                         "prove the checker before it judges anything "
@@ -606,6 +687,7 @@ def build_parser() -> argparse.ArgumentParser:
     h.add_argument("-n", "--limit", type=int, default=50)
     h.add_argument("--max-scan", type=int, default=400000)
     h.add_argument("--min-score", type=float)
+    h.add_argument("--min-length", type=int, default=0)
     h.add_argument("--no-filter", action="store_true")
     h.add_argument("--show", type=int, default=10)
     h.add_argument("--seed", type=int)
@@ -614,6 +696,7 @@ def build_parser() -> argparse.ArgumentParser:
     h.add_argument("--calibrate-only", action="store_true", help=argparse.SUPPRESS)
     h.add_argument("--delay", type=float, default=2.0)
     h.add_argument("--control", action="append")
+    h.add_argument("--include-reserved", action="store_true")
     h.add_argument("--claim-limit", type=int, default=3,
                    help="how many handles to actually claim in this pass")
     h.add_argument("--execute", action="store_true")
@@ -624,10 +707,16 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("username", nargs="+")
     m.add_argument("--status", default=storage.STATUS_CLAIMED, choices=[
         storage.STATUS_NEW, storage.STATUS_AVAILABLE, storage.STATUS_UNCLAIMED,
-        storage.STATUS_TAKEN, storage.STATUS_PURCHASABLE, storage.STATUS_CLAIMED,
-        storage.STATUS_SKIPPED])
+        storage.STATUS_TAKEN, storage.STATUS_PURCHASABLE, storage.STATUS_INVALID,
+        storage.STATUS_CLAIMED, storage.STATUS_SKIPPED])
     m.add_argument("--note")
     m.set_defaults(func=cmd_mark)
+
+    rs = sub.add_parser("rescore", help="re-analyse stored candidates after a scoring change")
+    rs.add_argument("--status")
+    rs.add_argument("-n", "--limit", type=int, default=100000)
+    rs.add_argument("--show", type=int, default=15)
+    rs.set_defaults(func=cmd_rescore)
 
     li = sub.add_parser("list", help="show stored candidates")
     li.add_argument("--status", choices=[
