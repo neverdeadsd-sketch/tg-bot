@@ -19,7 +19,10 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  await app.listen(config.port);
+  // Bind to all interfaces explicitly: inside a container, listening on
+  // localhost makes the service unreachable from the platform's router, and
+  // the deploy fails a health check that the app itself thinks is fine.
+  await app.listen(config.port, '0.0.0.0');
   new Logger('Bootstrap').log(`Wallet listening on port ${config.port}`);
 }
 

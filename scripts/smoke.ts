@@ -86,6 +86,18 @@ async function run(): Promise<void> {
   console.log(`Smoke test against ${BASE_URL}`);
   console.log(`Player ${playerId}\n`);
 
+  // --- readiness ----------------------------------------------------------
+  // First, because everything below is meaningless if the schema is missing,
+  // and this says so in one line instead of ten failed assertions.
+  console.log('health');
+  const health = await get('/health');
+  check('status 200', health.status, 200);
+  check('database reachable', health.body.database, 'reachable');
+  check('schema migrated', health.body.schema, 'migrated');
+  if (health.status !== 200) {
+    throw new Error(`Service is not ready: ${JSON.stringify(health.body)}`);
+  }
+
   // --- deposit ------------------------------------------------------------
   console.log('deposit');
   const deposit = await post('/wallet/deposit', {

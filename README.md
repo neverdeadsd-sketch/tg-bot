@@ -309,6 +309,48 @@ Called out because knowing what is missing matters as much as what is built:
 
 ---
 
+## Deploying
+
+The service needs a PostgreSQL URL and nothing else. It binds `0.0.0.0` so it is
+reachable from a platform router, reads `PORT` from the environment, and exposes
+a readiness probe.
+
+| Setting | Value |
+|---|---|
+| Build | `npm ci --include=dev && npm run build` |
+| Start | `node dist/scripts/migrate.js && node dist/src/main.js` |
+| Health check path | `/health` |
+| Required env | `DATABASE_URL` |
+| Optional env | `PORT`, `PROVIDER_WEBHOOK_SECRET` |
+
+`--include=dev` matters: with `NODE_ENV=production` set, npm omits
+devDependencies, and the build needs TypeScript.
+
+Migrations run on start. They are idempotent — `schema_migrations` makes a
+repeat a no-op — so a restart or a second instance costs one query.
+
+A managed Postgres URL ending in `?sslmode=require` works as-is; `pg` reads the
+mode from the connection string and verifies the server certificate.
+
+### `/health`
+
+The probe checks more than liveness. It opens a database connection **and**
+verifies the schema is present, because a process that is running against an
+unmigrated database is not healthy — it answers every real request with a 500.
+
+```json
+{ "status": "ok", "database": "reachable", "schema": "migrated",
+  "latestMigration": "002_audit_ordering.sql" }
+```
+
+Unmigrated, it returns `503` and says why, so a bad deploy fails loudly instead
+of going live broken:
+
+```json
+{ "status": "error", "reason": "SCHEMA_NOT_MIGRATED",
+  "missingTables": ["accounts", "account_balances", "..."] }
+```
+
 ## Scope
 
 A portfolio project, written to demonstrate how the money core of an iGaming
