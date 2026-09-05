@@ -194,6 +194,30 @@ async function run(): Promise<void> {
     .map((t) => t.kind);
   check('every transaction sums to zero', unbalanced, []);
 
+  // --- game provider ------------------------------------------------------
+  console.log('\ngame provider');
+  const paytable = await get('/game/paytable');
+  check('paytable served', paytable.status, 200);
+  const rtp = paytable.body.rtp as number;
+  check('RTP is inside a shippable band', rtp > 85 && rtp < 98, true);
+
+  // Fund a separate player so the spin cannot disturb the assertions above.
+  const gambler = randomUUID();
+  await post('/wallet/deposit', {
+    playerId: gambler, currency, amount: 10_000, idempotencyKey: `${gambler}-fund`,
+  });
+
+  const spin = await post('/game/spin', { playerId: gambler, currency, bet: 100 });
+  check('spin accepted', spin.status, 201);
+  check('three reels', (spin.body.reels as unknown[])?.length, 3);
+  const spent = 10_000 - 100 + (spin.body.payout as number);
+  check('stake debited and any win credited', spin.body.balance?.real, String(spent));
+
+  const brokePlayer = randomUUID();
+  const brokeSpin = await post('/game/spin', { playerId: brokePlayer, currency, bet: 100 });
+  check('spin refused without funds', brokeSpin.status, 422);
+  check('error code', brokeSpin.body.code, 'INSUFFICIENT_FUNDS');
+
   // --- demo page ----------------------------------------------------------
   console.log('\ndemo page');
   const page = await fetch(`${BASE_URL}/`);

@@ -90,6 +90,9 @@
   .sum { color: var(--faint); border-top: 1px dotted var(--line); padding-top: 3px; margin-top: 3px; }
 
   .empty { color: var(--faint); font-style: italic; padding: 18px 0; }
+  /* The ledger grows without bound once someone starts spinning, so it scrolls
+     in place rather than pushing the rest of the page off screen. */
+  #ledger { max-height: 380px; overflow-y: auto; }
 
   .log { font: 12px var(--mono); max-height: 320px; overflow: auto; }
   .entry { border-top: 1px solid var(--line-soft); padding: 9px 0; }
@@ -105,6 +108,37 @@
   .note { margin-top: 6px; font-size: 12px; }
   .note.good { color: var(--green); }
   .note.warn { color: var(--amber); }
+
+  /* slot */
+  .slot { margin-bottom: 16px; }
+  .slot .top { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; }
+  .slot .rtp { margin-left: auto; font: 12px var(--mono); color: var(--dim); }
+  .slot .rtp b { color: var(--green); }
+  .machine { display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
+  .reels { display: flex; gap: 10px; }
+  .reel {
+    width: 84px; height: 84px; display: flex; align-items: center; justify-content: center;
+    font-size: 40px; line-height: 1; background: #0b0f14;
+    border: 1px solid var(--line); border-radius: 10px;
+  }
+  .reel.hit { border-color: var(--green); box-shadow: 0 0 0 1px var(--green) inset; }
+  .spinctl { display: flex; gap: 10px; align-items: flex-end; }
+  .spinctl div { width: 120px; }
+  .spinctl input { margin-bottom: 0; }
+  #spin {
+    width: auto; padding: 11px 26px; font: 600 14px inherit; justify-content: center;
+    background: #1f6f3f; border-color: #2ea043; color: #fff;
+  }
+  #spin:hover:not(:disabled) { background: #2ea043; }
+  .outcome { min-height: 22px; font: 14px var(--mono); margin-top: 14px; }
+  .outcome .win { color: var(--green); font-weight: 600; }
+  .outcome .lose { color: var(--faint); }
+  .outcome .err { color: var(--red); }
+  .paytable { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 14px;
+              padding-top: 12px; border-top: 1px solid var(--line-soft);
+              font: 12px var(--mono); color: var(--dim); }
+  .paytable span b { color: var(--fg); }
+  .flow { margin-top: 10px; font-size: 12px; color: var(--faint); max-width: 78ch; }
 
   footer { margin-top: 30px; color: var(--faint); font-size: 12px; }
 </style>
@@ -130,10 +164,41 @@
     <button class="ghost" id="new" style="width:auto;margin:0 0 0 auto">new player</button>
   </div>
 
+  <div class="card slot">
+    <div class="top">
+      <h2 style="margin:0">Slot — a simulated game provider</h2>
+      <span class="rtp">RTP <b id="rtp">—</b> · house edge <span id="edge">—</span></span>
+    </div>
+
+    <div class="machine">
+      <div class="reels">
+        <div class="reel" id="r0">🍒</div>
+        <div class="reel" id="r1">🍋</div>
+        <div class="reel" id="r2">🔔</div>
+      </div>
+      <div class="spinctl">
+        <div>
+          <label for="bet">Stake</label>
+          <input type="number" id="bet" value="100" min="1" step="50">
+        </div>
+        <button id="spin">SPIN</button>
+      </div>
+    </div>
+
+    <div class="outcome" id="outcome"></div>
+    <div class="paytable" id="paytable"></div>
+    <p class="flow">
+      Each spin is a real seamless-wallet round: the provider debits the stake with a
+      HMAC-signed <code>POST /provider/bet</code>, turns the reels with a CSPRNG, and credits
+      any win with <code>POST /provider/win</code>. Watch the ledger below — a losing spin
+      writes one transaction, a winning spin writes two.
+    </p>
+  </div>
+
   <div class="grid">
     <div>
       <div class="card">
-        <h2>Actions</h2>
+        <h2>Manual operations</h2>
         <label for="amt">Amount (minor units)</label>
         <input type="number" id="amt" value="10000" min="1" step="100">
         <button data-act="deposit">Deposit <span class="hint">POST /wallet/deposit</span></button>
@@ -308,10 +373,72 @@ function renderLedger(rows) {
            '<span class="acc sum">Σ</span><span class="amt sum">' + sum + '</span></div></td>' +
            '<td class="seq">' + new Date(t.createdAt).toLocaleTimeString() + '</td></tr>';
   }).join('');
-  $('ledger').innerHTML =
+  const box = $('ledger');
+  box.innerHTML =
     '<table><thead><tr><th>seq</th><th>kind</th><th>entries</th><th>time</th></tr></thead>' +
     '<tbody>' + body + '</tbody></table>';
+  box.scrollTop = box.scrollHeight;   // newest rows stay in view
 }
+
+const GLYPHS = ['🍒', '🍋', '🔔', '⭐', '7️⃣'];
+let spinning = false;
+
+async function loadPaytable() {
+  const p = await fetch('/game/paytable').then(r => r.json()).catch(() => null);
+  if (!p) return;
+  $('rtp').textContent = p.rtp + '%';
+  $('edge').textContent = p.houseEdge + '%';
+  $('paytable').innerHTML = p.symbols.map(s =>
+    '<span>' + s.glyph + '×3 <b>' + s.threeOfAKind + '×</b>' +
+    (s.pair ? '  ·  ×2 <b>' + s.pair + '×</b>' : '') + '</span>').join('');
+}
+
+function paintReels(glyphs, hit) {
+  glyphs.forEach((g, i) => {
+    const el = $('r' + i);
+    el.textContent = g;
+    el.classList.toggle('hit', Boolean(hit && hit[i]));
+  });
+}
+
+async function spin() {
+  if (spinning) return;
+  const bet = Number($('bet').value);
+  if (!bet || bet < 1) return;
+
+  spinning = true; $('spin').disabled = true;
+  $('outcome').innerHTML = '';
+  const anim = setInterval(() =>
+    paintReels([0, 1, 2].map(() => GLYPHS[Math.floor(Math.random() * GLYPHS.length)])), 70);
+
+  const { status, data } = await call('POST', '/game/spin',
+    { playerId: player, currency: CURRENCY, bet });
+
+  clearInterval(anim);
+  spinning = false; $('spin').disabled = false;
+
+  if (status < 200 || status >= 300) {
+    paintReels(GLYPHS.slice(0, 3));
+    $('outcome').innerHTML = '<span class="err">' +
+      (data.code === 'INSUFFICIENT_FUNDS' ? 'Not enough money — deposit first.' : (data.message || 'Error')) +
+      '</span>';
+    return;
+  }
+
+  const glyphs = data.reels.map(r => r.glyph);
+  const hit = data.winningSymbol ? data.reels.map(r => r.key === data.winningSymbol) : null;
+  paintReels(glyphs, hit);
+
+  $('outcome').innerHTML = data.payout > 0
+    ? '<span class="win">' + data.kind.replace(/_/g, ' ').toLowerCase() +
+      ' · ×' + data.multiplier + ' · +' + (data.payout / 100).toFixed(2) + '</span>'
+    : '<span class="lose">No win.</span>';
+
+  refresh();
+}
+
+$('spin').addEventListener('click', spin);
+loadPaytable();
 
 document.querySelectorAll('[data-act]').forEach(b =>
   b.addEventListener('click', () => act(b.dataset.act)));

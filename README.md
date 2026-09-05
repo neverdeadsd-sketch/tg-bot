@@ -171,7 +171,10 @@ required on every write.
 | `POST` | `/wallet/win` | Credit real balance |
 | `POST` | `/wallet/bonus` | Grant a bonus with `wageringMultiplier` |
 | `GET` | `/wallet/:playerId/balance?currency=EUR` | Current balances and wagering progress |
+| `GET` | `/wallet/:playerId/transactions` | Audit trail with the entries of each operation |
 | `POST` | `/provider/bet` · `/provider/win` | Seamless-wallet callbacks, HMAC-signed |
+| `POST` | `/game/spin` | Play one round of the slot |
+| `GET` | `/game/paytable` | Reel weights, payouts and the derived RTP |
 
 ```bash
 curl -X POST localhost:3000/wallet/deposit \
@@ -244,8 +247,8 @@ npm test          # requires Postgres; tests truncate TEST_DATABASE_URL
 npm run typecheck
 ```
 
-14 tests over two suites: behaviour (`test/wallet.spec.ts`) and concurrency
-(`test/concurrency.spec.ts`). Tests run against a real PostgreSQL instance
+23 tests over three suites: behaviour (`test/wallet.spec.ts`), concurrency
+(`test/concurrency.spec.ts`) and the slot maths (`test/game.spec.ts`). Tests run against a real PostgreSQL instance
 rather than mocks — the behaviour under test *is* database behaviour, and a
 mocked `FOR UPDATE` proves nothing.
 
@@ -309,11 +312,62 @@ Called out because knowing what is missing matters as much as what is built:
 
 ---
 
+## The game provider
+
+Operators do not write the games. Slots, roulette and live tables are licensed
+from Pragmatic, Evolution, Playson and others, run on the provider's servers,
+and meet the operator over a **seamless wallet** integration: on every spin the
+provider debits the stake, then credits any win.
+
+`src/game/` is a stand-in for that provider — a three-reel slot — and it talks to
+the wallet the way a real one would, over HMAC-signed HTTP to `/provider/*`
+rather than by reaching into the service layer next door. That keeps the
+integration honest: the signature guard, the idempotency keys and the error
+contract are all exercised for real. The cost is a loopback request per call,
+which is the right trade for a demo whose point is showing the protocol.
+
+```
+POST /game/spin
+   │
+   ├─ POST /provider/bet   signed, key `${roundId}:bet`   → stake debited
+   ├─ spin the reels        crypto.randomInt, not Math.random
+   └─ POST /provider/win   signed, key `${roundId}:win`   → win credited
+```
+
+The money decision comes first: if the wallet refuses the stake, the reels never
+turn.
+
+### The maths
+
+`src/game/paytable.ts` holds the reel strip, the payouts and the RTP derivation
+in one file, because they are one decision — change a weight and the return to
+player moves with it.
+
+RTP is **computed** by enumerating all 5³ outcomes, never hardcoded, so it can
+not drift from the table it describes. `GET /game/paytable` returns it, and the
+demo page displays whatever the server derives:
+
+| | value |
+|---|---|
+| Theoretical RTP | 94.84% |
+| House edge | 5.16% |
+| Three of a kind | 5.50% of spins |
+| Any paying combination | ~14% of spins |
+
+Verified over a million simulated spins: 94.74% actual against 94.84%
+theoretical, and three-of-a-kind at 5.52% against 5.50% expected.
+`test/game.spec.ts` pins the exact derived value and asserts the RTP stays
+inside a band an operator could ship — a slot that pays out more than it takes
+is not a rounding error.
+
+Outcomes come from `crypto.randomInt`, not `Math.random`: a generator seeded
+predictably has no business deciding anything of value.
+
 ## The demo page
 
-`GET /` serves a single static page that drives the API from a browser: deposit,
-grant a bonus, bet, win, withdraw. It exists because a wallet with no way to
-look at it is a hard thing to show anyone.
+`GET /` serves a single static page that drives the API from a browser: play the
+slot, and below it deposit, grant a bonus, bet, win, withdraw by hand. It exists
+because a wallet with no way to look at it is a hard thing to show anyone.
 
 It is built around the two things worth seeing rather than reading about:
 
