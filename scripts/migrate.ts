@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from 'pg';
+import { config as loadDotenv } from 'dotenv';
 
 // Resolved at runtime because this file runs both from source (ts-node, so
 // __dirname is scripts/) and from the compiled output (dist/scripts/).
@@ -60,9 +61,17 @@ export async function runMigrations(connectionString: string): Promise<string[]>
 }
 
 if (require.main === module) {
+  // The app reads .env through src/config.ts; the migration runner is a
+  // separate entry point and has to load it too, or `npm run migrate` silently
+  // targets nothing on a machine where the variable is not exported by hand.
+  loadDotenv();
+
   const url = process.env.DATABASE_URL;
   if (!url) {
-    console.error('DATABASE_URL is not set');
+    console.error(
+      'DATABASE_URL is not set. Copy .env.example to .env and fill it in, ' +
+        'or export DATABASE_URL in your shell.',
+    );
     process.exit(1);
   }
 
