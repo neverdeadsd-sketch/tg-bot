@@ -4,6 +4,7 @@ import {
   AccountType,
   LedgerEntryDraft,
   TransactionKind,
+  TransactionView,
 } from './domain/types';
 import {
   IdempotencyKeyConflictException,
@@ -229,6 +230,47 @@ export class LedgerRepository {
       transactionId,
       JSON.stringify(result),
     ]);
+  }
+
+  /**
+   * A player's operations with the entries that make up each one, in insertion
+   * order. Ordered by seq, not created_at: two transactions written inside one
+   * database transaction share a timestamp — see migration 002.
+   */
+  async listTransactions(
+    client: PoolClient,
+    playerId: string,
+    limit = 100,
+  ): Promise<TransactionView[]> {
+    const { rows } = await client.query<{
+      seq: string;
+      kind: TransactionKind;
+      reference: string | null;
+      created_at: Date;
+      entries: { account: AccountType; amount: string }[];
+    }>(
+      `SELECT t.seq, t.kind, t.reference, t.created_at,
+              json_agg(
+                json_build_object('account', a.type, 'amount', e.amount::text)
+                ORDER BY e.id
+              ) AS entries
+       FROM ledger_transactions t
+       JOIN ledger_entries e ON e.transaction_id = t.id
+       JOIN accounts a       ON a.id = e.account_id
+       WHERE t.player_id = $1
+       GROUP BY t.seq, t.id, t.kind, t.reference, t.created_at
+       ORDER BY t.seq
+       LIMIT $2`,
+      [playerId, limit],
+    );
+
+    return rows.map((row) => ({
+      seq: Number(row.seq),
+      kind: row.kind,
+      reference: row.reference,
+      createdAt: row.created_at.toISOString(),
+      entries: row.entries,
+    }));
   }
 
   async getBalances(

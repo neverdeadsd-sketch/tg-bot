@@ -65,3 +65,13 @@ export interface OperationResult {
   replayed: boolean;
   balance: BalanceView;
 }
+
+/** One operation as the audit trail shows it: its legs, and what they sum to. */
+export interface TransactionView {
+  /** Monotonic insertion order — the correct way to read the log. */
+  seq: number;
+  kind: TransactionKind;
+  reference: string | null;
+  createdAt: string;
+  entries: { account: AccountType; amount: string }[];
+}

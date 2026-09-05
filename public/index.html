@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ledger-wallet — live demo</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230d1117'/%3E%3Ctext x='50' y='72' font-size='62' text-anchor='middle' fill='%233fb950' font-family='monospace'%3E%E2%82%AC%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #272e38; --line-soft: #1f252e;
+    --fg: #e6edf3; --dim: #8b949e; --faint: #6e7681;
+    --accent: #58a6ff; --green: #3fb950; --amber: #d29922; --red: #f85149; --violet: #bc8cff;
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 14px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  a { color: var(--accent); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 60px; }
+
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline; margin-bottom: 4px; }
+  h1 { font: 600 20px/1.2 var(--mono); margin: 0; letter-spacing: -0.3px; }
+  .tag { font: 11px/1 var(--mono); color: var(--dim); border: 1px solid var(--line);
+         border-radius: 999px; padding: 5px 9px; }
+  .sub { color: var(--dim); margin: 6px 0 22px; max-width: 70ch; }
+
+  .player { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+            background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+            padding: 10px 12px; margin-bottom: 20px; }
+  .player code { font: 12px var(--mono); color: var(--violet); word-break: break-all; }
+
+  .grid { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  .card + .card { margin-top: 16px; }
+  .card h2 { font: 600 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase;
+             color: var(--dim); margin: 0 0 14px; }
+
+  label { display: block; font-size: 12px; color: var(--dim); margin-bottom: 5px; }
+  input[type=number] {
+    width: 100%; background: #0b0f14; color: var(--fg); border: 1px solid var(--line);
+    border-radius: 6px; padding: 9px 10px; font: 14px var(--mono); margin-bottom: 14px;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+
+  button {
+    width: 100%; text-align: left; background: #21262d; color: var(--fg);
+    border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px;
+    font: 13px/1.2 inherit; cursor: pointer; margin-bottom: 7px;
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  }
+  button:hover:not(:disabled) { background: #2a3038; border-color: #3d444d; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button .hint { font: 11px var(--mono); color: var(--faint); }
+  button.ghost { background: transparent; }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+  .stat { background: #0b0f14; border: 1px solid var(--line-soft); border-radius: 8px; padding: 11px 12px; }
+  .stat .k { font-size: 11px; color: var(--dim); margin-bottom: 4px; }
+  .stat .v { font: 600 19px/1.1 var(--mono); }
+  .stat .u { font: 11px var(--mono); color: var(--faint); margin-top: 3px; }
+  .stat.real .v { color: var(--green); }
+  .stat.bonus .v { color: var(--amber); }
+
+  .wager { background: #0b0f14; border: 1px solid var(--line-soft); border-radius: 8px; padding: 11px 12px; }
+  .wager .row { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); margin-bottom: 7px; }
+  .bar { height: 6px; background: #21262d; border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--amber); transition: width .25s; }
+  .locked { color: var(--amber); font-size: 12px; margin-top: 8px; }
+  .free { color: var(--green); font-size: 12px; }
+
+  table { width: 100%; border-collapse: collapse; font: 12.5px var(--mono); }
+  th { text-align: left; font-weight: 600; color: var(--dim); font-size: 11px;
+       letter-spacing: .06em; text-transform: uppercase; padding: 0 10px 8px 0; }
+  td { padding: 8px 10px 8px 0; border-top: 1px solid var(--line-soft); vertical-align: top; }
+  .seq { color: var(--faint); }
+  .kind { font-weight: 600; }
+  .kind.DEPOSIT, .kind.WIN { color: var(--green); }
+  .kind.WITHDRAWAL, .kind.BET { color: var(--red); }
+  .kind.BONUS_GRANT { color: var(--amber); }
+  .kind.BONUS_CONVERT { color: var(--violet); }
+  .legs { display: grid; grid-template-columns: auto auto; gap: 1px 14px; }
+  .legs .acc { color: var(--dim); }
+  .legs .amt { text-align: right; }
+  .pos { color: var(--green); }
+  .neg { color: var(--red); }
+  .sum { color: var(--faint); border-top: 1px dotted var(--line); padding-top: 3px; margin-top: 3px; }
+
+  .empty { color: var(--faint); font-style: italic; padding: 18px 0; }
+
+  .log { font: 12px var(--mono); max-height: 320px; overflow: auto; }
+  .entry { border-top: 1px solid var(--line-soft); padding: 9px 0; }
+  .entry:first-child { border-top: none; }
+  .entry .head { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .method { color: var(--violet); }
+  .path { color: var(--dim); word-break: break-all; }
+  .code { margin-left: auto; font-weight: 600; }
+  .code.ok { color: var(--green); }
+  .code.err { color: var(--red); }
+  .entry pre { margin: 6px 0 0; white-space: pre-wrap; word-break: break-word;
+               color: var(--faint); font-size: 11.5px; }
+  .note { margin-top: 6px; font-size: 12px; }
+  .note.good { color: var(--green); }
+  .note.warn { color: var(--amber); }
+
+  footer { margin-top: 30px; color: var(--faint); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>ledger-wallet</h1>
+    <span class="tag">double-entry</span>
+    <span class="tag">idempotent</span>
+    <span class="tag">race-safe</span>
+  </header>
+  <p class="sub">
+    A gambling-platform wallet, live. Every button below is a real HTTP call to the API;
+    every movement of money is written as a double-entry transaction whose legs sum to zero.
+    Amounts are integers in minor units — 1000 is €10.00.
+  </p>
+
+  <div class="player">
+    <span style="color:var(--dim)">player</span>
+    <code id="pid">—</code>
+    <button class="ghost" id="new" style="width:auto;margin:0 0 0 auto">new player</button>
+  </div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h2>Actions</h2>
+        <label for="amt">Amount (minor units)</label>
+        <input type="number" id="amt" value="10000" min="1" step="100">
+        <button data-act="deposit">Deposit <span class="hint">POST /wallet/deposit</span></button>
+        <button data-act="bonus">Grant bonus ×2 <span class="hint">POST /wallet/bonus</span></button>
+        <button data-act="bet">Bet <span class="hint">POST /wallet/bet</span></button>
+        <button data-act="win">Win <span class="hint">POST /wallet/win</span></button>
+        <button data-act="withdraw">Withdraw <span class="hint">POST /wallet/withdraw</span></button>
+      </div>
+
+      <div class="card">
+        <h2>Idempotency</h2>
+        <p style="color:var(--dim);font-size:12.5px;margin:0 0 12px">
+          Providers retry on timeout. Replaying a request with the same key must not move money twice.
+        </p>
+        <button id="replay" disabled>Replay last request <span class="hint">same key</span></button>
+        <button id="conflict" disabled>Replay, changed amount <span class="hint">expect 409</span></button>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <h2>Balance</h2>
+        <div class="stats">
+          <div class="stat real"><div class="k">Real</div><div class="v" id="b-real">0.00</div><div class="u" id="b-real-m">0</div></div>
+          <div class="stat bonus"><div class="k">Bonus</div><div class="v" id="b-bonus">0.00</div><div class="u" id="b-bonus-m">0</div></div>
+          <div class="stat"><div class="k">Total</div><div class="v" id="b-total">0.00</div><div class="u" id="b-total-m">0</div></div>
+        </div>
+        <div class="wager" id="wager"></div>
+      </div>
+
+      <div class="card">
+        <h2>Ledger — every transaction sums to zero</h2>
+        <div id="ledger"><div class="empty">No operations yet. Start with a deposit.</div></div>
+      </div>
+
+      <div class="card">
+        <h2>API calls</h2>
+        <div class="log" id="log"><div class="empty">Nothing sent yet.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Free instance — the first request after idle may take ~50s while it wakes.
+    Source and design notes in the <a href="https://github.com/neverdeadsd-sketch/tg-bot">repository</a>.
+  </footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const money = (minor) => (Number(minor) / 100).toFixed(2);
+const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
+  : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 3 | 8)).toString(16); }));
+
+const CURRENCY = 'EUR';
+let player = localStorage.getItem('player') || uuid();
+localStorage.setItem('player', player);
+let last = null;                       // last successful request, for the replay demo
+
+function setPlayer(id) {
+  player = id; localStorage.setItem('player', id);
+  $('pid').textContent = id;
+  last = null; $('replay').disabled = true; $('conflict').disabled = true;
+  $('log').innerHTML = '<div class="empty">Nothing sent yet.</div>';
+  refresh();
+}
+
+async function call(method, path, body, note) {
+  const opts = { method, headers: { 'content-type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  let status = 0, data = null;
+  try {
+    const res = await fetch(path, opts);
+    status = res.status;
+    data = await res.json();
+  } catch (e) {
+    data = { error: String(e) };
+  }
+  log(method, path, status, body, data, note);
+  return { status, data };
+}
+
+function log(method, path, status, body, data, note) {
+  const ok = status >= 200 && status < 300;
+  const el = document.createElement('div');
+  el.className = 'entry';
+  el.innerHTML =
+    '<div class="head"><span class="method">' + method + '</span>' +
+    '<span class="path">' + path + '</span>' +
+    '<span class="code ' + (ok ? 'ok' : 'err') + '">' + (status || 'ERR') + '</span></div>' +
+    '<pre>' + JSON.stringify(data, null, 2) + '</pre>' +
+    (note ? '<div class="note ' + (ok ? 'good' : 'warn') + '">' + note + '</div>' : '');
+  const box = $('log');
+  if (box.firstChild && box.firstChild.className === 'empty') box.innerHTML = '';
+  box.prepend(el);
+}
+
+async function act(kind) {
+  const amount = Number($('amt').value);
+  if (!amount || amount < 1) return;
+
+  const paths = { deposit: 'deposit', bonus: 'bonus', bet: 'bet', win: 'win', withdraw: 'withdraw' };
+  const body = { playerId: player, currency: CURRENCY, amount, idempotencyKey: uuid() };
+  if (kind === 'bonus') body.wageringMultiplier = 2;
+  if (kind === 'bet' || kind === 'win') body.reference = 'round-' + Date.now();
+
+  const notes = {
+    bonus: 'Bonus is locked until the wagering requirement is met.',
+    bet: 'Real money is spent first; bonus covers the rest.',
+  };
+  const { status, data } = await call('POST', '/wallet/' + paths[kind], body, notes[kind]);
+
+  if (status >= 200 && status < 300) {
+    last = { path: '/wallet/' + paths[kind], body };
+    $('replay').disabled = false; $('conflict').disabled = false;
+  }
+  refresh();
+}
+
+async function replay(changeAmount) {
+  if (!last) return;
+  const body = { ...last.body };
+  if (changeAmount) body.amount = body.amount + 1;
+  const note = changeAmount
+    ? 'Same key, different payload → 409. Always a caller bug, so it is surfaced, not hidden.'
+    : 'Same key, same payload → the stored result is replayed and no money moves.';
+  await call('POST', last.path, body, note);
+  refresh();
+}
+
+async function refresh() {
+  const b = await fetch('/wallet/' + player + '/balance?currency=' + CURRENCY)
+    .then(r => r.ok ? r.json() : null).catch(() => null);
+  if (b) {
+    $('b-real').textContent = money(b.real);   $('b-real-m').textContent = b.real;
+    $('b-bonus').textContent = money(b.bonus); $('b-bonus-m').textContent = b.bonus;
+    $('b-total').textContent = money(b.total); $('b-total-m').textContent = b.total;
+    renderWagering(b.wagering);
+  }
+  const tx = await fetch('/wallet/' + player + '/transactions')
+    .then(r => r.ok ? r.json() : []).catch(() => []);
+  renderLedger(tx);
+}
+
+function renderWagering(w) {
+  if (!w) {
+    $('wager').innerHTML = '<div class="free">No active bonus — the whole real balance is withdrawable.</div>';
+    return;
+  }
+  const pct = Math.min(100, Number(w.progress) / Number(w.required) * 100);
+  $('wager').innerHTML =
+    '<div class="row"><span>Wagering</span><span>' + money(w.progress) + ' / ' + money(w.required) + '</span></div>' +
+    '<div class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></div>' +
+    '<div class="locked">Withdrawals blocked — ' + money(w.remaining) + ' left to wager.</div>';
+}
+
+function renderLedger(rows) {
+  if (!rows.length) {
+    $('ledger').innerHTML = '<div class="empty">No operations yet. Start with a deposit.</div>';
+    return;
+  }
+  const body = rows.map(t => {
+    const legs = t.entries.map(e =>
+      '<span class="acc">' + e.account + '</span>' +
+      '<span class="amt ' + (Number(e.amount) < 0 ? 'neg' : 'pos') + '">' +
+      (Number(e.amount) > 0 ? '+' : '') + e.amount + '</span>').join('');
+    const sum = t.entries.reduce((a, e) => a + Number(e.amount), 0);
+    return '<tr><td class="seq">' + t.seq + '</td>' +
+           '<td class="kind ' + t.kind + '">' + t.kind + '</td>' +
+           '<td><div class="legs">' + legs +
+           '<span class="acc sum">Σ</span><span class="amt sum">' + sum + '</span></div></td>' +
+           '<td class="seq">' + new Date(t.createdAt).toLocaleTimeString() + '</td></tr>';
+  }).join('');
+  $('ledger').innerHTML =
+    '<table><thead><tr><th>seq</th><th>kind</th><th>entries</th><th>time</th></tr></thead>' +
+    '<tbody>' + body + '</tbody></table>';
+}
+
+document.querySelectorAll('[data-act]').forEach(b =>
+  b.addEventListener('click', () => act(b.dataset.act)));
+$('replay').addEventListener('click', () => replay(false));
+$('conflict').addEventListener('click', () => replay(true));
+$('new').addEventListener('click', () => setPlayer(uuid()));
+
+$('pid').textContent = player;
+refresh();
+</script>
+</body>
+</html>

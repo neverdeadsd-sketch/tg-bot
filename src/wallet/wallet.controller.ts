@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { WalletService } from './wallet.service';
 import { BetDto, DepositDto, GrantBonusDto, WinDto, WithdrawDto } from './dto/wallet.dto';
-import { BalanceView, OperationResult } from './domain/types';
+import { BalanceView, OperationResult, TransactionView } from './domain/types';
 
 @Controller('wallet')
 export class WalletController {
@@ -30,6 +30,14 @@ export class WalletController {
   @Post('bonus')
   grantBonus(@Body() dto: GrantBonusDto): Promise<OperationResult> {
     return this.wallet.grantBonus({ ...dto, amount: BigInt(dto.amount) });
+  }
+
+  @Get(':playerId/transactions')
+  getTransactions(
+    @Param('playerId', ParseUUIDPipe) playerId: string,
+    @Query('limit') limit?: string,
+  ): Promise<TransactionView[]> {
+    return this.wallet.getTransactions(playerId, limit ? Number(limit) : undefined);
   }
 
   @Get(':playerId/balance')

@@ -181,6 +181,25 @@ async function run(): Promise<void> {
   check('status 401', unsigned.status, 401);
   check('error code', unsigned.body.code, 'MISSING_SIGNATURE');
 
+  // --- transactions endpoint ---------------------------------------------
+  console.log('\ntransactions endpoint');
+  const history = await get(`/wallet/${playerId}/transactions`);
+  check('status 200', history.status, 200);
+  const kinds = (history.body as unknown as { kind: string }[]).map((t) => t.kind);
+  check('operations in order', kinds, [
+    'DEPOSIT', 'BONUS_GRANT', 'BET', 'BONUS_CONVERT', 'WITHDRAWAL',
+  ]);
+  const unbalanced = (history.body as unknown as { kind: string; entries: { amount: string }[] }[])
+    .filter((t) => t.entries.reduce((sum, e) => sum + Number(e.amount), 0) !== 0)
+    .map((t) => t.kind);
+  check('every transaction sums to zero', unbalanced, []);
+
+  // --- demo page ----------------------------------------------------------
+  console.log('\ndemo page');
+  const page = await fetch(`${BASE_URL}/`);
+  check('served at /', page.status, 200);
+  check('is html', (page.headers.get('content-type') ?? '').includes('text/html'), true);
+
   // --- audit trail --------------------------------------------------------
   // Read straight from the database: this is the one thing the HTTP surface
   // does not expose, and the ordering it verifies was a real bug.

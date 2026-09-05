@@ -4,7 +4,13 @@ import { createHash } from 'node:crypto';
 import { DatabaseService } from '../database/database.service';
 import { LedgerRepository } from './ledger.repository';
 import { BonusRepository, findActiveBonus } from './bonus.repository';
-import { BalanceView, LedgerEntryDraft, OperationResult, TransactionKind } from './domain/types';
+import {
+  BalanceView,
+  LedgerEntryDraft,
+  OperationResult,
+  TransactionKind,
+  TransactionView,
+} from './domain/types';
 import {
   ActiveBonusExistsException,
   InsufficientFundsException,
@@ -222,6 +228,12 @@ export class WalletService {
 
   async getBalance(playerId: string, currency: string): Promise<BalanceView> {
     return this.db.withTransaction((client) => this.buildBalanceView(client, playerId, currency));
+  }
+
+  async getTransactions(playerId: string, limit?: number): Promise<TransactionView[]> {
+    return this.db.withTransaction((client) =>
+      this.ledger.listTransactions(client, playerId, limit),
+    );
   }
 
   // ---------------------------------------------------------------------------

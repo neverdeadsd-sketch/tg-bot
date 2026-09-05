@@ -309,6 +309,28 @@ Called out because knowing what is missing matters as much as what is built:
 
 ---
 
+## The demo page
+
+`GET /` serves a single static page that drives the API from a browser: deposit,
+grant a bonus, bet, win, withdraw. It exists because a wallet with no way to
+look at it is a hard thing to show anyone.
+
+It is built around the two things worth seeing rather than reading about:
+
+- **The ledger table** renders each transaction's legs and their sum, so the
+  double-entry invariant is visible rather than asserted — every row ends in `Σ 0`.
+- **Replay last request** sends the same idempotency key again and shows the
+  response coming back with `"replayed": true` and the balance unmoved.
+  **Replay, changed amount** shows the `409` that a mutated retry earns.
+
+Every call is logged on the page with its method, path, status and JSON body, so
+the API is legible without opening a terminal. No build step and no
+dependencies — one HTML file in `public/`, served by
+`app.useStaticAssets`.
+
+`GET /wallet/:playerId/transactions` backs the ledger table: it returns each
+operation with its entries, ordered by `seq`.
+
 ## Deploying
 
 The service needs a PostgreSQL URL and nothing else. It binds `0.0.0.0` so it is
