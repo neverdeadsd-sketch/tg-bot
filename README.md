@@ -38,6 +38,7 @@ npm install
 npm run migrate
 npm test                         # 14 tests, including the concurrency suite
 npm run start:dev                # http://localhost:3000
+npm run smoke                    # in a second terminal: drives the running server
 ```
 
 Or run everything in containers:
@@ -247,6 +248,35 @@ npm run typecheck
 (`test/concurrency.spec.ts`). Tests run against a real PostgreSQL instance
 rather than mocks — the behaviour under test *is* database behaviour, and a
 mocked `FOR UPDATE` proves nothing.
+
+### Smoke test
+
+```bash
+npm run start:dev     # one terminal
+npm run smoke         # another
+```
+
+`scripts/smoke.ts` drives the **running** server over HTTP and checks the whole
+money path end to end — deposit, replay, key conflict, bonus, blocked and
+allowed withdrawal, overdraft, provider signature — then reads the audit trail
+straight from the database to confirm its ordering. It exits non-zero on the
+first failed check, so it can gate a deploy.
+
+It exists because the unit suite structurally cannot catch one class of failure,
+and this project hit it: the tests use their own database and their own
+environment loading, so when migrations never reached the *application*
+database, every endpoint returned 500 while the suite stayed green. Pointed at
+an unmigrated database the smoke test fails in exactly the right way:
+
+```
+  ✗ status 201
+      expected: 201
+      actual:   500
+SMOKE ERRORED
+relation "ledger_transactions" does not exist
+```
+
+Tests prove the logic. The smoke test proves the deployment.
 
 ---
 

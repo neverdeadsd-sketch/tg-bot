@@ -9,6 +9,7 @@
     "start:dev": "ts-node-dev --respawn --transpile-only src/main.ts",
     "migrate": "ts-node scripts/migrate.ts",
     "migrate:dist": "node dist/scripts/migrate.js",
+    "smoke": "ts-node scripts/smoke.ts",
     "test": "jest --runInBand",
     "test:watch": "jest --watch --runInBand",
     "typecheck": "tsc --noEmit"
