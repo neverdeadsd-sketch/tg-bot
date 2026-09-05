@@ -514,6 +514,17 @@ def cmd_rescore(args) -> int:
     return 0
 
 
+def cmd_ui(args) -> int:
+    """Serve the local app and open it in a browser."""
+    from .webui import serve
+
+    cfg = load_config(args.config)
+    db_path = args.db or cfg.db
+    Storage(db_path).close()          # create the file if this is a first run
+    serve(cfg, db_path, port=args.port, open_browser=not args.no_browser)
+    return 0
+
+
 def cmd_list(args) -> int:
     with _open_db(args) as db:
         items = db.all_by_status(args.status, args.limit)
@@ -757,6 +768,12 @@ def build_parser() -> argparse.ArgumentParser:
         storage.STATUS_CLAIMED, storage.STATUS_SKIPPED])
     m.add_argument("--note")
     m.set_defaults(func=cmd_mark)
+
+    ui = sub.add_parser("ui", help="open the app in a browser instead of the terminal")
+    ui.add_argument("-p", "--port", type=int, default=8765)
+    ui.add_argument("--no-browser", action="store_true",
+                    help="print the link instead of opening a browser")
+    ui.set_defaults(func=cmd_ui)
 
     rs = sub.add_parser("rescore", help="re-analyse stored candidates after a scoring change")
     rs.add_argument("--status")

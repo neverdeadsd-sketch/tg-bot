@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tgnames</title>
+<link rel="stylesheet" href="app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>◇</text></svg>">
+</head>
+<body>
+<div class="shell">
+
+  <!-- ── rail ─────────────────────────────────────────────────────────── -->
+  <aside class="rail">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-text">tgnames</span>
+    </div>
+
+    <nav class="nav" aria-label="Разделы">
+      <button class="nav-item is-active" data-view="overview">
+        <span class="nav-icon" aria-hidden="true">▤</span> Обзор
+      </button>
+      <button class="nav-item" data-view="candidates">
+        <span class="nav-icon" aria-hidden="true">≡</span> Кандидаты
+        <span class="nav-count" data-count="candidates"></span>
+      </button>
+      <button class="nav-item" data-view="analyze">
+        <span class="nav-icon" aria-hidden="true">◈</span> Оценка
+      </button>
+      <button class="nav-item" data-view="hunt">
+        <span class="nav-icon" aria-hidden="true">◎</span> Поиск
+        <span class="nav-dot" data-busy hidden></span>
+      </button>
+    </nav>
+
+    <div class="rail-foot">
+      <div class="quota" id="quota"></div>
+      <div class="db-path" id="dbPath" title=""></div>
+    </div>
+  </aside>
+
+  <!-- ── main ─────────────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <!-- Обзор -->
+    <section class="view is-active" data-view="overview">
+      <header class="view-head">
+        <div>
+          <h1>Обзор</h1>
+          <p class="sub">Состояние базы и результаты проверок</p>
+        </div>
+        <button class="btn btn-ghost" id="refreshBtn">Обновить</button>
+      </header>
+
+      <div class="tiles" id="tiles"></div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <h2>Результаты по длине имени</h2>
+            <p class="sub">Где имена ещё можно занять, а где полоса выбрана</p>
+          </div>
+          <div class="legend" id="chartLegend"></div>
+        </div>
+        <div class="chart" id="lengthChart"></div>
+        <p class="note" id="chartNote"></p>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Последние события</h2></div>
+        <ul class="events" id="events"></ul>
+      </div>
+    </section>
+
+    <!-- Кандидаты -->
+    <section class="view" data-view="candidates">
+      <header class="view-head">
+        <div>
+          <h1>Кандидаты</h1>
+          <p class="sub" id="candSub"></p>
+        </div>
+      </header>
+
+      <div class="filters">
+        <input class="field field-search" id="search" type="search"
+               placeholder="Поиск по имени…" autocomplete="off">
+        <select class="field" id="statusFilter" aria-label="Статус">
+          <option value="">Все статусы</option>
+          <option value="new">Не проверено</option>
+          <option value="available">Свободно (API)</option>
+          <option value="unclaimed">Владельца не видно</option>
+          <option value="purchasable">Продаётся</option>
+          <option value="taken">Занято</option>
+          <option value="invalid">Недопустимо</option>
+          <option value="claimed">Занято мной</option>
+          <option value="skipped">Пропущено</option>
+        </select>
+        <select class="field" id="sortBy" aria-label="Сортировка">
+          <option value="score">По оценке</option>
+          <option value="length">По длине</option>
+          <option value="name">По алфавиту</option>
+          <option value="status">По статусу</option>
+        </select>
+        <label class="check">
+          <input type="checkbox" id="hideReserved"> Скрыть зарезервированные
+        </label>
+        <div class="filters-spacer"></div>
+        <button class="btn btn-ghost" id="copyBtn">Скопировать список</button>
+      </div>
+
+      <div class="panel panel-flush">
+        <div class="table-wrap">
+          <table class="table" id="candTable">
+            <thead>
+              <tr>
+                <th class="col-name">Имя</th>
+                <th class="col-score">Оценка</th>
+                <th class="col-tier">Тир</th>
+                <th class="col-status">Статус</th>
+                <th class="col-tags">Признаки</th>
+                <th class="col-note">Примечание</th>
+                <th class="col-act"></th>
+              </tr>
+            </thead>
+            <tbody id="candBody"></tbody>
+          </table>
+        </div>
+        <div class="empty" id="candEmpty" hidden>Ничего не найдено</div>
+      </div>
+    </section>
+
+    <!-- Оценка -->
+    <section class="view" data-view="analyze">
+      <header class="view-head">
+        <div>
+          <h1>Оценка имени</h1>
+          <p class="sub">Полностью офлайн — разбор по факторам, без обращений к сети</p>
+        </div>
+      </header>
+
+      <div class="analyze-grid">
+        <div class="panel">
+          <label class="label" for="analyzeInput">Юзернейм</label>
+          <input class="field field-big" id="analyzeInput" type="text"
+                 placeholder="например goldvault" autocomplete="off" spellcheck="false">
+          <div id="analyzeResult" class="analyze-result"></div>
+        </div>
+        <div class="panel">
+          <h2>Как считается</h2>
+          <p class="sub">Пять сигналов, каждый нормирован к 0–100 и смешан с весом.
+             Затем применяются множители за торговые марки, рискованные подстроки
+             и суффикс <code>bot</code>.</p>
+          <div id="analyzeReasons" class="reasons"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Поиск -->
+    <section class="view" data-view="hunt">
+      <header class="view-head">
+        <div>
+          <h1>Поиск</h1>
+          <p class="sub">Генерация кандидатов и проверка занятости без ключей</p>
+        </div>
+        <button class="btn btn-danger" id="stopBtn" hidden>Остановить</button>
+      </header>
+
+      <div class="hunt-grid">
+        <div class="panel">
+          <h2>Генерация</h2>
+          <div class="form-row">
+            <label class="label" for="strategy">Стратегия</label>
+            <select class="field" id="strategy"></select>
+          </div>
+          <div class="form-row form-row-2">
+            <div>
+              <label class="label" for="genLimit">Сколько оставить</label>
+              <input class="field" id="genLimit" type="number" value="300" min="1" max="5000">
+            </div>
+            <div>
+              <label class="label" for="minLength">Мин. длина</label>
+              <input class="field" id="minLength" type="number" value="7" min="0" max="32">
+            </div>
+          </div>
+          <label class="check">
+            <input type="checkbox" id="noFilter"> Не отсеивать зарезервированные
+          </label>
+          <button class="btn btn-primary btn-wide" id="generateBtn">Сгенерировать</button>
+        </div>
+
+        <div class="panel">
+          <h2>Проверка занятости</h2>
+          <div class="form-row form-row-2">
+            <div>
+              <label class="label" for="scanLimit">Сколько проверить</label>
+              <input class="field" id="scanLimit" type="number" value="50" min="1" max="500">
+            </div>
+            <div>
+              <label class="label" for="scanDelay">Пауза, с</label>
+              <input class="field" id="scanDelay" type="number" value="2" min="0.5" max="30" step="0.5">
+            </div>
+          </div>
+          <div class="form-row">
+            <label class="label" for="fragmentControl">
+              Имя, выставленное на продажу
+              <span class="hint" title="Нужно, чтобы включить кросс-проверку Fragment: чекер учится распознавать листинг на вашем образце">?</span>
+            </label>
+            <input class="field" id="fragmentControl" type="text"
+                   placeholder="например alalal" autocomplete="off" spellcheck="false">
+          </div>
+          <label class="check">
+            <input type="checkbox" id="includeReserved"> Проверять и зарезервированные
+          </label>
+          <button class="btn btn-primary btn-wide" id="scanBtn">Проверить</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Ход работы</h2>
+          <span class="job-meta" id="jobMeta"></span>
+        </div>
+        <div class="progress" id="progressWrap" hidden>
+          <div class="progress-bar"><span id="progressFill"></span></div>
+        </div>
+        <div class="log" id="log"><p class="log-empty">Пока ничего не запускалось</p></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Обслуживание</h2></div>
+        <p class="sub">Оценки и признаки пишутся при генерации. Если алгоритм
+           менялся, сохранённые строки устаревают — пересчёт их обновит.</p>
+        <button class="btn btn-ghost" id="rescoreBtn">Пересчитать всё</button>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
