@@ -14,6 +14,10 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY migrations ./migrations
-COPY scripts ./scripts
 EXPOSE 3000
-CMD ["node", "dist/src/main.js"]
+
+# Migrations run before the server accepts traffic. They are idempotent —
+# schema_migrations makes a repeat a no-op — so a restart or a second replica
+# costs one query. Without this a container starts happily against an
+# unmigrated database and answers every request with a 500.
+CMD ["sh", "-c", "node dist/scripts/migrate.js && node dist/src/main.js"]
