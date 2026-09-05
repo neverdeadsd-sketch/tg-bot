@@ -175,6 +175,20 @@ describe('WalletService', () => {
       );
       expect(rows).toHaveLength(1);
 
+      // ...and the audit trail must say the release happened AFTER the bet that
+      // caused it. Ordering by created_at cannot: now() is the transaction
+      // start time, so both rows written by this bet share one timestamp.
+      // `seq` is the monotonic insertion order that makes the log readable.
+      const { rows: ordered } = await testPool.query<{ kind: string }>(
+        `SELECT kind FROM ledger_transactions ORDER BY seq`,
+      );
+      expect(ordered.map((row) => row.kind)).toEqual([
+        'DEPOSIT',
+        'BONUS_GRANT',
+        'BET',
+        'BONUS_CONVERT',
+      ]);
+
       // And withdrawal is now unblocked.
       await wallet.withdraw({ playerId, currency, amount: 9_000n, idempotencyKey: key() });
       await expect(balanceOf(playerId)).resolves.toEqual({ real: 0n, bonus: 0n });

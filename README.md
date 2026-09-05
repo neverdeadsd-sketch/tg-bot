@@ -214,6 +214,26 @@ in the audit trail rather than buried inside whichever bet triggered it.
 A partial unique index allows only one active bonus per player per currency, so
 a concurrent double-grant cannot slip through.
 
+### Reading the audit trail
+
+Order by `ledger_transactions.seq`, never by `created_at`:
+
+```sql
+SELECT seq, kind, created_at FROM ledger_transactions ORDER BY seq;
+```
+
+`created_at` originally defaulted to `now()`, which in PostgreSQL is the
+*transaction* start time — so the BET and the BONUS_CONVERT it triggers, written
+in one transaction, shared a timestamp to the microsecond and came back in
+arbitrary order. Migration `002` switches the default to `clock_timestamp()` and
+adds `seq`, a monotonic insertion counter.
+
+Both changes matter for different reasons. Distinct timestamps make the recorded
+times mean what a reader assumes. `seq` is what the log should actually be
+ordered by, because wall clocks are not monotonic: NTP steps them, and they can
+run backwards. An audit trail must not depend on one to know what happened
+first.
+
 ---
 
 ## Testing
