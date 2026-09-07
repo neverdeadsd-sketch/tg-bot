@@ -374,8 +374,8 @@
     if (!gl) return null;
 
     var DEFAULTS = {
-      deep: '#0b1a2e', rim: '#1d5f86', dot: '#22d3ee',
-      arc: '#5eead4', mark: '#a5f3fc', atmo: '#22d3ee',
+      deep: '#0a1830', rim: '#245f9e', dot: '#4A9BFF',
+      arc: '#8AC5FF', mark: '#E2EFFF', atmo: '#3B8EF5',
       additive: true, dotScale: 1
     };
     var colors = {}, additive = true, dotScale = 1;

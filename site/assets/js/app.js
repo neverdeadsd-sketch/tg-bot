@@ -13,44 +13,25 @@
     checkout: '/checkout',              // страница оплаты на сайте
     currency: '₽',
 
-    plans: [
-      {
-        id: 'start', name: 'Старт', sub: 'Одному человеку',
-        month: 199, year: 119, devices: 5,
-        features: [
-          'Все 16 локаций',
-          'Безлимитная скорость',
-          'VLESS + Reality, AmneziaWG, Shadowsocks',
-          'Раздельное туннелирование',
-          'Поддержка 24/7 в Telegram'
-        ],
-        absent: ['Отдельные профили для семьи']
-      },
-      {
-        id: 'pro', name: 'Про', sub: 'Самый частый выбор', featured: true,
-        month: 349, year: 209, devices: 10,
-        features: [
-          'Всё из «Старта»',
-          'Приоритетные серверы с меньшей загрузкой',
-          'Выделенный IP по запросу',
-          'Ранний доступ к новым локациям',
-          'Ответ поддержки вне очереди'
-        ],
-        absent: ['Отдельные профили для семьи']
-      },
-      {
-        id: 'family', name: 'Семейный', sub: 'До пяти профилей',
-        month: 599, year: 359, devices: 25,
-        features: [
-          'Всё из «Про»',
-          '5 отдельных профилей с своими ключами',
-          'Каждый профиль отзывается отдельно',
-          'Общая оплата, раздельный доступ',
-          'Помощь с настройкой роутера'
-        ],
-        absent: []
-      }
-    ]
+    /* Одна подписка, отличается только оплаченный срок.
+     * Цены и сроки — из бота HOLL VPN BOT, раздел «Купить». */
+    subscription: {
+      devices: 1,
+      features: [
+        'Все локации, переключение без смены ключа',
+        'Безлимитная скорость и трафик',
+        'Работает в обычных клиентах — Happ и других, без нашего приложения',
+        'Ссылка-подписка сама подтягивает актуальные серверы',
+        'Личный кабинет и продление прямо в боте',
+        'Реферальная программа: приводите друзей'
+      ],
+      terms: [
+        { days: 30,  price: 199,  label: '1 месяц'   },
+        { days: 90,  price: 499,  label: '3 месяца'  },
+        { days: 180, price: 899,  label: '6 месяцев' },
+        { days: 365, price: 1499, label: 'Год'       }
+      ]
+    }
   };
 
   var $  = function (s, r) { return (r || document).querySelector(s); };
@@ -276,8 +257,8 @@
     // A dark navy sphere on a paper-white page reads as a hole, so the globe
     // gets its own palette per theme.
     var LIGHT_GLOBE = {
-      deep: '#cfe3f4', rim: '#5f9ecd', dot: '#0a4f68',
-      arc: '#0e7490', mark: '#0c4a6e', atmo: '#38bdf8',
+      deep: '#d3e4f7', rim: '#5f93cd', dot: '#123f7a',
+      arc: '#1B5FD0', mark: '#0d2f5e', atmo: '#3B8EF5',
       additive: false, dotScale: 1.3
     };
     function globeTheme() {
@@ -352,90 +333,85 @@
 
   /* ------------------------------------------------------------ тарифы -- */
 
-  var period = 'year';
+  var termIndex = 0;   // выбранный срок; по умолчанию — самый выгодный
 
-  function planCard(p) {
-    var price = p[period];
-    var save = Math.round((1 - p.year / p.month) * 100);
-    var note = period === 'year'
-      ? '<s>' + fmt(p.month) + ' ' + CONFIG.currency + '</s> — <b>выгода ' + save +
-        '%</b>, ' + fmt(p.year * 12) + ' ' + CONFIG.currency + ' за год'
-      : 'списание раз в месяц, отменить можно в любой момент';
+  function monthly(term) { return term.price / (term.days / 30); }
 
-    var feats = p.features.map(function (f) {
-      return '<li><svg aria-hidden="true"><use href="#i-check"/></svg>' + f + '</li>';
-    }).join('');
-    var absent = (p.absent || []).map(function (f) {
-      return '<li class="muted"><svg aria-hidden="true"><use href="#i-close-x"/></svg>' + f + '</li>';
-    }).join('');
-
-    return '' +
-      '<article class="card plan' + (p.featured ? ' plan--featured' : '') + '" data-plan="' + p.id + '">' +
-        (p.featured ? '<span class="plan-tag">Популярный</span>' : '') +
-        '<h3>' + p.name + '</h3>' +
-        '<div class="plan-sub">' + p.sub + ' · до ' + p.devices + ' устройств</div>' +
-        '<div class="price"><span class="amount">' + fmt(price) + '</span>' +
-          '<span class="per">' + CONFIG.currency + ' / мес</span></div>' +
-        '<div class="price-note">' + note + '</div>' +
-        '<ul>' + feats + absent + '</ul>' +
-        '<div class="plan-foot">' +
-          '<a class="btn ' + (p.featured ? 'btn--primary' : 'btn--ghost') + ' btn--block" ' +
-             'data-tg data-utm="plan_' + p.id + '_' + period + '" href="#">' +
-            '<svg aria-hidden="true"><use href="#i-tg"/></svg>Оформить в Telegram</a>' +
-          '<div class="plan-alt">или <a href="' + CONFIG.checkout + '?plan=' + p.id +
-            '&period=' + period + '">оплатить на сайте</a></div>' +
-        '</div>' +
-      '</article>';
+  function plural(n, one, few, many) {
+    var a = n % 100, b = n % 10;
+    if (a > 4 && a < 21) return many;
+    if (b === 1) return one;
+    if (b > 1 && b < 5) return few;
+    return many;
   }
 
-  function renderPlans() {
-    var host = $('#plans');
+  function days(n) { return n + ' ' + plural(n, 'день', 'дня', 'дней'); }
+
+  function renderSubscription() {
+    var sub = CONFIG.subscription;
+    var host = $('#subTerms');
     if (!host) return;
-    host.innerHTML = CONFIG.plans.map(planCard).join('');
-    wireLinks(host);
 
-    var hint = $('#saveHint');
-    if (hint) {
-      var best = Math.max.apply(null, CONFIG.plans.map(function (p) {
-        return Math.round((1 - p.year / p.month) * 100);
-      }));
-      hint.textContent = period === 'year'
-        ? 'Экономия до ' + best + '% по сравнению с помесячной оплатой'
-        : 'На годовой оплате те же тарифы дешевле до ' + best + '%';
-    }
-  }
+    var base = monthly(sub.terms[0]);   // месячный тариф — точка отсчёта
 
-  function initPricing() {
-    var seg = $$('[data-period]');
-    if (!seg.length) return;
-    seg.forEach(function (btn) {
+    host.innerHTML = sub.terms.map(function (t, i) {
+      var per = monthly(t);
+      var off = Math.round((1 - per / base) * 100);
+      var on = i === termIndex;
+      return '<button class="term' + (on ? ' is-on' : '') + '" type="button" role="radio"' +
+        ' data-i="' + i + '" aria-checked="' + on + '">' +
+        '<span class="t-radio" aria-hidden="true"></span>' +
+        '<span class="t-name">' + t.label +
+          '<span class="t-days">' + days(t.days) + '</span></span>' +
+        '<span class="t-total">' + fmt(t.price) + ' ' + CONFIG.currency + '</span>' +
+        '<span class="t-per">' + fmt(per) + ' ' + CONFIG.currency + '/мес</span>' +
+        (off > 0 ? '<span class="t-off">−' + off + '%</span>' : '<span class="t-off"></span>') +
+      '</button>';
+    }).join('');
+
+    $$('.term', host).forEach(function (btn) {
       btn.addEventListener('click', function () {
-        period = btn.getAttribute('data-period');
-        seg.forEach(function (b) {
-          b.setAttribute('aria-selected', String(b === btn));
-        });
-        renderPlans();
+        termIndex = +btn.getAttribute('data-i');
+        renderSubscription();
         updateCalc();
       });
     });
-    renderPlans();
+
+    var chosen = sub.terms[termIndex];
+    var cta = $('#subCta');
+    if (cta) {
+      cta.setAttribute('data-utm', 'sub_' + chosen.days + 'd');
+      cta.href = tgLink('sub_' + chosen.days + 'd');
+      $('#subCtaLabel').textContent =
+        'Оформить на ' + days(chosen.days) + ' — ' + fmt(chosen.price) + ' ' + CONFIG.currency;
+    }
+    var alt = $('#subCheckout');
+    if (alt) alt.href = CONFIG.checkout + '?days=' + chosen.days;
+
+    var feats = $('#subFeatures');
+    if (feats && !feats.childElementCount) {
+      feats.innerHTML = sub.features.map(function (f) {
+        return '<li><svg aria-hidden="true"><use href="#i-check"/></svg>' + f + '</li>';
+      }).join('');
+    }
+
   }
 
   /* -------------------------------------------------------------- квиз -- */
 
   var QUIZ = [
     {
-      q: 'Сколько устройств нужно подключить?',
-      hint: 'Считайте телефоны, компьютеры, планшеты и телевизор.',
+      q: 'Как долго планируете пользоваться?',
+      hint: 'От этого зависит выгодный срок — возможности на всех сроках одинаковые.',
       options: [
-        { label: 'Одно-два — только себе', v: { devices: 2 } },
-        { label: 'Три-семь — я и близкие', v: { devices: 7 } },
-        { label: 'Восемь и больше — вся семья', v: { devices: 20 } }
+        { label: 'Присматриваюсь, на пробу', v: { horizon: 'short' } },
+        { label: 'Несколько месяцев точно', v: { horizon: 'mid' } },
+        { label: 'Постоянно, нужен всегда', v: { horizon: 'long' } }
       ]
     },
     {
       q: 'Что важнее всего?',
-      hint: 'Можно выбрать главное — остальное есть на всех тарифах.',
+      hint: 'На цену не влияет — от ответа зависит совет по настройке.',
       options: [
         { label: 'Чтобы просто работало и не блокировалось', v: { need: 'access' } },
         { label: 'Скорость: стриминг, торренты, игры', v: { need: 'speed' } },
@@ -443,30 +419,53 @@
       ]
     },
     {
-      q: 'На какой срок берёте?',
-      hint: 'Чем длиннее срок, тем дешевле выходит месяц.',
+      q: 'Сколько устройств подключите?',
+      hint: 'Одна подписка работает на одном устройстве одновременно.',
       options: [
-        { label: 'На месяц, посмотрю по ходу', v: { term: 'month' } },
-        { label: 'Сразу на год, чтобы дешевле', v: { term: 'year' } }
+        { label: 'Одно — телефон или компьютер', v: { devices: 1 } },
+        { label: 'Два-три', v: { devices: 3 } },
+        { label: 'Весь дом, включая телевизор', v: { devices: 6 } }
       ]
     }
   ];
 
   function recommend(a) {
-    var plan = CONFIG.plans[0];
-    if (a.devices > 10) plan = CONFIG.plans[2];
-    else if (a.devices > 2 || a.need === 'speed') plan = CONFIG.plans[1];
+    var terms = CONFIG.subscription.terms;
+    var pick = terms[0];
+    if (a.horizon === 'long') pick = terms[terms.length - 1];
+    else if (a.horizon === 'mid') pick = terms[Math.min(1, terms.length - 1)];
 
-    var term = a.term === 'year' ? 'year' : 'month';
+    var base = monthly(terms[0]);
+    var off = Math.round((1 - monthly(pick) / base) * 100);
     var reasons = [];
-    reasons.push('Устройств хватит: тариф даёт до ' + plan.devices + ', вам нужно около ' + a.devices + '.');
-    if (a.need === 'speed') reasons.push('Для стриминга и игр берите ближайшие локации — Хельсинки или Варшаву.');
-    if (a.need === 'privacy') reasons.push('Включите Kill Switch и проверьте утечки — обе инструкции есть в справочнике.');
-    if (a.need === 'access') reasons.push('Оставьте протокол VLESS + Reality: он выдаётся по умолчанию и не определяется фильтрами.');
-    if (a.term === 'year') reasons.push('Годовая оплата экономит ' +
-      Math.round((1 - plan.year / plan.month) * 100) + '% — это ' +
-      fmt(plan.month * 12 - plan.year * 12) + ' ' + CONFIG.currency + ' за год.');
-    return { plan: plan, term: term, reasons: reasons };
+
+    if (a.horizon === 'short') {
+      reasons.push('Берите месяц: переплата за короткий срок небольшая, ' +
+                   'а продлить на длинный можно в любой момент.');
+    } else {
+      reasons.push('Этот срок выходит на ' + off + '% дешевле помесячной оплаты — ' +
+                   fmt(monthly(pick)) + ' ' + CONFIG.currency + ' в месяц вместо ' +
+                   fmt(base) + '.');
+    }
+    if (a.need === 'speed') {
+      reasons.push('Для стриминга и игр берите ближайшие локации — Хельсинки, Варшаву или Стокгольм.');
+    }
+    if (a.need === 'privacy') {
+      reasons.push('Включите Kill Switch и проверьте утечки DNS и WebRTC — обе инструкции есть в справочнике.');
+    }
+    if (a.need === 'access') {
+      reasons.push('Оставьте протокол VLESS + Reality: он выдаётся по умолчанию и не определяется фильтрами.');
+    }
+
+    if (a.devices > 3) {
+      reasons.push('На весь дом выгоднее настроить VPN на роутере: тогда телевизор, ' +
+                   'консоль и остальное пойдут через одну подписку.');
+    } else if (a.devices > 1) {
+      reasons.push('Одна подписка работает на одном устройстве одновременно — ' +
+                   'на второе возьмите ещё одну или настройте роутер.');
+    }
+
+    return { term: pick, reasons: reasons };
   }
 
   function initQuiz() {
@@ -479,7 +478,7 @@
       var q = QUIZ[step];
       bar.style.width = ((step / QUIZ.length) * 100) + '%';
       body.innerHTML =
-        '<span class="eyebrow" style="margin-bottom:14px">Подбор тарифа</span>' +
+        '<span class="eyebrow" style="margin-bottom:14px">Подбор срока</span>' +
         '<div class="quiz-q">' + q.q + '</div>' +
         '<div class="quiz-hint">' + q.hint + '</div>' +
         '<div class="quiz-options">' + q.options.map(function (o, i) {
@@ -505,17 +504,16 @@
     function renderResult() {
       bar.style.width = '100%';
       var r = recommend(answers);
-      var price = r.plan[r.term];
       body.innerHTML =
         '<span class="eyebrow" style="margin-bottom:14px">Рекомендация</span>' +
         '<div class="quiz-result">' +
-          '<div class="r-plan">' + r.plan.name +
-            ' <span class="r-price">' + fmt(price) + ' ' + CONFIG.currency + '/мес</span></div>' +
+          '<div class="r-plan">Подписка на ' + days(r.term.days) +
+            ' <span class="r-price">' + fmt(r.term.price) + ' ' + CONFIG.currency + '</span></div>' +
           '<ul>' + r.reasons.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul>' +
           '<div class="stack gap-8">' +
-            '<a class="btn btn--primary btn--block" data-tg data-utm="quiz_' + r.plan.id + '" href="#">' +
-              '<svg aria-hidden="true"><use href="#i-tg"/></svg>' +
-              'Оформить «' + r.plan.name + '»</a>' +
+            '<a class="btn btn--primary btn--block" data-tg data-utm="quiz_' +
+              r.term.days + 'd" href="#">' +
+              '<svg aria-hidden="true"><use href="#i-tg"/></svg>Оформить в Telegram</a>' +
             '<button class="btn btn--ghost btn--block" type="button" data-restart>Пройти заново</button>' +
           '</div>' +
         '</div>';
@@ -531,17 +529,20 @@
   /* ------------------------------------------------------ калькулятор -- */
 
   function updateCalc() {
-    var price = $('#calcPrice'), devices = $('#calcDevices');
-    if (!price || !devices) return;
+    var price = $('#calcPrice');
+    if (!price) return;
 
-    var cur = +price.value, need = +devices.value;
-    var plan = CONFIG.plans.filter(function (p) { return p.devices >= need; })[0] ||
-               CONFIG.plans[CONFIG.plans.length - 1];
-    var ours = plan[period];
+    var cur = +price.value;
+    var term = CONFIG.subscription.terms[termIndex];
+    var ours = monthly(term);
 
     $('#calcPriceOut').textContent = fmt(cur);
-    $('#calcDevicesOut').textContent = need;
     $('#calcOurs').textContent = fmt(ours) + ' ' + CONFIG.currency;
+
+    var label = $('#calcTerm');
+    if (label) {
+      label.textContent = 'при подписке на ' + days(term.days);
+    }
 
     var save = (cur - ours) * 12;
     var out = $('#calcSave'), box = out.closest('.o');
@@ -563,12 +564,10 @@
   }
 
   function initCalc() {
-    ['#calcPrice', '#calcDevices'].forEach(function (sel) {
-      var el = $(sel);
-      if (!el) return;
-      paintRange(el);
-      el.addEventListener('input', function () { paintRange(el); updateCalc(); });
-    });
+    var el = $('#calcPrice');
+    if (!el) return;
+    paintRange(el);
+    el.addEventListener('input', function () { paintRange(el); updateCalc(); });
     updateCalc();
   }
 
@@ -809,7 +808,7 @@
     initCounters();
     initTilt();
     initGlobeAndServers();
-    initPricing();
+    renderSubscription();
     initQuiz();
     initCalc();
     initQR();
