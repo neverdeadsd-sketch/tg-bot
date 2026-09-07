@@ -546,22 +546,27 @@ kbd {
 
 /* --------------------------------------------------------------- servers */
 
-.server-panel { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 24px; align-items: start; }
+/* При двух локациях список занимает всю ширину: в две колонки он оставлял
+   под собой полстраницы пустоты. */
+.server-panel { display: grid; gap: 20px; }
+.server-aside { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 720px) { .server-aside { grid-template-columns: 1fr; } }
 
 .server-list {
   border: 1px solid var(--line); border-radius: var(--r-lg);
   background: var(--bg-3); overflow: hidden;
 }
 .server-list header {
-  display: grid; grid-template-columns: 1fr 92px 108px;
+  display: grid; grid-template-columns: 1fr 108px;
   gap: 12px; padding: 12px 18px;
   border-bottom: 1px solid var(--line);
   background: var(--bg-2);
   font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--faint);
 }
 .server-scroll { max-height: 420px; overflow-y: auto; }
+.server-row .ping { text-align: right; }
 .server-row {
-  display: grid; grid-template-columns: 1fr 92px 108px;
+  display: grid; grid-template-columns: 1fr 108px;
   gap: 12px; align-items: center; width: 100%;
   padding: 12px 18px; border: 0; border-bottom: 1px solid var(--line-soft);
   background: transparent; text-align: left; cursor: pointer;
@@ -950,7 +955,6 @@ html:not(.js) .reveal { opacity: 1; transform: none; }
   /* Список сроков под блоком «что входит», а не рядом с ним. */
   .sub-grid { grid-template-columns: 1fr; }
   .globe-stage { max-width: 520px; margin-inline: auto; }
-  .server-panel { grid-template-columns: 1fr; }
   .footer-grid { grid-template-columns: 1fr 1fr; }
   .bento .span-4, .bento .span-3 { grid-column: span 3; }
   .bento > * { grid-column: span 3; }
@@ -990,7 +994,7 @@ html:not(.js) .reveal { opacity: 1; transform: none; }
 
   .bento > *, .bento .span-3, .bento .span-4, .bento .span-6 { grid-column: span 6; }
   .footer-grid { grid-template-columns: 1fr; gap: 26px; }
-  .server-list header, .server-row { grid-template-columns: 1fr 70px 76px; padding-inline: 14px; }
+  .server-list header, .server-row { grid-template-columns: 1fr 84px; padding-inline: 14px; }
   .term { padding: 13px 14px; gap: 3px 10px; }
   .t-name { font-size: .95rem; }
   .t-total { font-size: 1.15rem; }

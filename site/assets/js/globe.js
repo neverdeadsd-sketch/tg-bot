@@ -75,22 +75,19 @@
   /* --------------------------------------------------------------- exits -- */
 
   var LOCATIONS = [
-    { id:'nl', city:'Амстердам',    country:'Нидерланды',      lat:52.37,  lon:4.90,    load:0.34, hub:true },
-    { id:'de', city:'Франкфурт',    country:'Германия',        lat:50.11,  lon:8.68,    load:0.41, hub:true },
-    { id:'fi', city:'Хельсинки',    country:'Финляндия',       lat:60.17,  lon:24.94,   load:0.22, hub:true },
-    { id:'se', city:'Стокгольм',    country:'Швеция',          lat:59.33,  lon:18.07,   load:0.28 },
-    { id:'pl', city:'Варшава',      country:'Польша',          lat:52.23,  lon:21.01,   load:0.37 },
-    { id:'gb', city:'Лондон',       country:'Великобритания',  lat:51.51,  lon:-0.13,   load:0.45 },
-    { id:'fr', city:'Париж',        country:'Франция',         lat:48.86,  lon:2.35,    load:0.31 },
-    { id:'ch', city:'Цюрих',        country:'Швейцария',       lat:47.38,  lon:8.54,    load:0.19 },
-    { id:'tr', city:'Стамбул',      country:'Турция',          lat:41.01,  lon:28.98,   load:0.52 },
-    { id:'am', city:'Ереван',       country:'Армения',         lat:40.18,  lon:44.51,   load:0.26 },
-    { id:'kz', city:'Алматы',       country:'Казахстан',       lat:43.24,  lon:76.89,   load:0.30 },
-    { id:'ae', city:'Дубай',        country:'ОАЭ',             lat:25.20,  lon:55.27,   load:0.38 },
-    { id:'us', city:'Нью-Йорк',     country:'США',             lat:40.71,  lon:-74.01,  load:0.47, hub:true },
-    { id:'la', city:'Лос-Анджелес', country:'США',             lat:34.05,  lon:-118.24, load:0.35 },
-    { id:'jp', city:'Токио',        country:'Япония',          lat:35.68,  lon:139.69,  load:0.29 },
-    { id:'sg', city:'Сингапур',     country:'Сингапур',        lat:1.35,   lon:103.82,  load:0.33 }
+    { id: 'nl', city: 'Амстердам',  country: 'Нидерланды', lat: 52.37, lon: 4.90  },
+    { id: 'fi', city: 'Хельсинки',  country: 'Финляндия',  lat: 60.17, lon: 24.94 }
+  ];
+
+  /* Концы дуг, входящих в узлы. Не серверы и не подписаны — это трафик,
+   * который к ним стекается; служат только тому, чтобы два выхода читались
+   * как выходы, а не как две случайные точки на шаре. */
+  var INFLOW = [
+    [55.8, 37.6], [59.9, 30.3], [56.8, 60.6], [55.0, 82.9], [56.0, 92.9],
+    [52.3, 104.3], [43.2, 76.9], [41.3, 69.2], [50.5, 30.5], [53.9, 27.6],
+    [41.7, 44.8], [40.2, 44.5], [45.0, 39.0], [54.7, 20.5], [47.2, 39.7],
+    [56.3, 44.0], [51.5, 46.0], [58.0, 56.2], [48.7, 44.5], [61.3, 73.4],
+    [43.1, 131.9], [50.6, 36.6]
   ];
 
   /* -------------------------------------------------------------- shaders -- */
@@ -164,7 +161,7 @@
     '  float head = fract(uTime * 0.19 + aPhase);',
     '  float d = head - aT;',
     '  if (d < 0.0) d += 1.0;',
-    '  vGlow = exp(-d * 11.0) + 0.14;',
+    '  vGlow = exp(-d * 9.0) * 1.15 + 0.30;',
     '  gl_Position = uProj * uView * w;',
     '}'
   ].join('\n');
@@ -201,7 +198,7 @@
     '  float r = length(d);',
     '  if (r > 0.5) discard;',
     '  float core = smoothstep(0.16, 0.03, r);',
-    '  float ring = smoothstep(0.5, 0.2, r) * 0.35 * (0.4 + vPulse);',
+    '  float ring = smoothstep(0.5, 0.18, r) * 0.5 * (0.35 + vPulse);',
     '  gl_FragColor = vec4(uColor, (core + ring) * vFade);',
     '}'
   ].join('\n');
@@ -343,7 +340,7 @@
       var b = toVec(pairs[i][1].lon, pairs[i][1].lat, 1);
       var dot = Math.max(-1, Math.min(1, a[0]*b[0] + a[1]*b[1] + a[2]*b[2]));
       // Longer hops arch higher, so distant routes stay clear of the surface.
-      var lift = 0.10 + 0.30 * (Math.acos(dot) / Math.PI);
+      var lift = 0.06 + 0.55 * (Math.acos(dot) / Math.PI);
       var ph = Math.random();
       for (var s = 0; s <= segments; s++) {
         var t = s / segments;
@@ -411,15 +408,14 @@
     var bufDotPos = buffer(gl, dots.pos);
     var bufDotSeed = buffer(gl, dots.seed);
 
-    // Routes fan out from the European hubs, which is where most traffic for
-    // this audience actually exits.
-    var hubs = LOCATIONS.filter(function (l) { return l.hub; });
-    var pairs = [];
-    LOCATIONS.forEach(function (l, i) {
-      if (l.hub) return;
-      pairs.push([hubs[i % hubs.length], l]);
+    // Каждая точка притока тянется к ближайшему из двух выходов — так на
+    // глобусе видно направление трафика, а не абстрактная сетка.
+    // Обе локации входят в одну подписку, так что поток делится между ними
+    // поровну: по ближайшему узлу почти всё ушло бы в Хельсинки, и второй
+    // выход потерялся бы на картинке.
+    var pairs = INFLOW.map(function (o, i) {
+      return [{ lat: o[0], lon: o[1] }, LOCATIONS[i % LOCATIONS.length]];
     });
-    pairs.push([hubs[0], hubs[2]], [hubs[1], hubs[3 % hubs.length]], [hubs[0], hubs[1]]);
     var arcs = arcGeometry(pairs, 64);
     var bufArcPos = buffer(gl, arcs.pos);
     var bufArcT = buffer(gl, arcs.t);
@@ -435,7 +431,7 @@
     var bufMarkSeed = buffer(gl, new Float32Array(markSeed));
 
     var state = {
-      yaw: -0.6, pitch: -0.32, targetYaw: -0.6, targetPitch: -0.32,
+      yaw: -0.30, pitch: 0.42, targetYaw: -0.30, targetPitch: 0.42,
       spin: 0.055, dragging: false, vx: 0, lastX: 0, lastY: 0,
       dpr: 1, w: 0, h: 0, running: false, raf: 0, t0: performance.now()
     };
@@ -517,7 +513,7 @@
       gl.uniformMatrix4fv(progArc.loc.uView, false, view);
       gl.uniformMatrix4fv(progArc.loc.uModel, false, model);
       gl.uniform3fv(progArc.loc.uColor, colors.arc);
-      gl.uniform1f(progArc.loc.uAlpha, additive ? 0.85 : 0.95);
+      gl.uniform1f(progArc.loc.uAlpha, additive ? 0.62 : 0.8);
       gl.uniform1f(progArc.loc.uTime, time);
       bindAttr(gl, progArc, 'aPos', bufArcPos, 3);
       bindAttr(gl, progArc, 'aT', bufArcT, 1);
@@ -535,7 +531,7 @@
       gl.uniformMatrix4fv(progMark.loc.uModel, false, model);
       gl.uniform3fv(progMark.loc.uCam, camera);
       gl.uniform3fv(progMark.loc.uColor, colors.mark);
-      gl.uniform1f(progMark.loc.uPix, 7 * pix);
+      gl.uniform1f(progMark.loc.uPix, 11 * pix);
       gl.uniform1f(progMark.loc.uTime, time);
       bindAttr(gl, progMark, 'aPos', bufMarkPos, 3);
       bindAttr(gl, progMark, 'aSeed', bufMarkSeed, 1);

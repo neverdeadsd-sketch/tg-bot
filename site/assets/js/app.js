@@ -18,7 +18,7 @@
     subscription: {
       devices: 1,
       features: [
-        'Все локации, переключение без смены ключа',
+        'Обе локации — Нидерланды и Финляндия — в одной подписке',
         'Безлимитная скорость и трафик',
         'Работает в обычных клиентах — Happ и других, без нашего приложения',
         'Ссылка-подписка сама подтягивает актуальные серверы',
@@ -284,7 +284,7 @@
       if (canvas) canvas.hidden = true;
       var fb = document.createElement('div');
       fb.className = 'globe-fallback';
-      fb.textContent = '16 серверов в Европе, США и Азии';
+      fb.textContent = 'Серверы в Нидерландах и Финляндии';
       stage.appendChild(fb);
     }
 
@@ -297,7 +297,7 @@
       if (readout) {
         readout.hidden = false;
         roCity.textContent = loc.city;
-        roMeta.textContent = '≈ ' + loc.rtt + ' мс · загрузка ' + Math.round(loc.load * 100) + '%';
+        roMeta.textContent = '≈ ' + loc.rtt + ' мс · ' + loc.country;
       }
     }
 
@@ -308,16 +308,13 @@
       row.className = 'server-row';
       row.setAttribute('role', 'listitem');
 
-      var loadClass = loc.load > 0.66 ? 'high' : (loc.load > 0.4 ? 'mid' : '');
       row.innerHTML =
         '<span class="name">' +
           '<span class="flag">' + loc.id.toUpperCase() + '</span>' +
           '<span><span class="city">' + loc.city + '</span> ' +
           '<span class="country">' + loc.country + '</span></span>' +
         '</span>' +
-        '<span class="ping' + (loc.rtt > 120 ? ' is-far' : '') + '">≈ ' + loc.rtt + ' мс</span>' +
-        '<span class="loadbar"><i class="' + loadClass + '" style="width:' +
-          Math.round(loc.load * 100) + '%"></i></span>';
+        '<span class="ping' + (loc.rtt > 120 ? ' is-far' : '') + '">≈ ' + loc.rtt + ' мс</span>';
 
       row.addEventListener('click', function () { select(loc, row); });
       list.appendChild(row);
@@ -326,8 +323,8 @@
 
     var foot = document.createElement('div');
     foot.className = 'server-foot';
-    foot.innerHTML = '<span><b>' + sorted.length + '</b> локаций — список прокручивается</span>' +
-                     '<span>ближайшая: <b>' + sorted[0].city + '</b></span>';
+    foot.innerHTML = '<span>Обе локации доступны на любой подписке</span>' +
+                     '<span>ближайшая к вам: <b>' + sorted[0].city + '</b></span>';
     list.parentNode.appendChild(foot);
   }
 
@@ -448,7 +445,7 @@
                    fmt(base) + '.');
     }
     if (a.need === 'speed') {
-      reasons.push('Для стриминга и игр берите ближайшие локации — Хельсинки, Варшаву или Стокгольм.');
+      reasons.push('Для стриминга и игр берите Финляндию: из России до Хельсинки маршрут короче, чем до Амстердама.');
     }
     if (a.need === 'privacy') {
       reasons.push('Включите Kill Switch и проверьте утечки DNS и WebRTC — обе инструкции есть в справочнике.');
