@@ -444,9 +444,8 @@
     },
     {
       q: 'На какой срок берёте?',
-      hint: 'Годовая оплата дешевле, но начать можно и с пробного периода.',
+      hint: 'Чем длиннее срок, тем дешевле выходит месяц.',
       options: [
-        { label: 'Сначала попробую бесплатно', v: { term: 'trial' } },
         { label: 'На месяц, посмотрю по ходу', v: { term: 'month' } },
         { label: 'Сразу на год, чтобы дешевле', v: { term: 'year' } }
       ]
@@ -464,11 +463,10 @@
     if (a.need === 'speed') reasons.push('Для стриминга и игр берите ближайшие локации — Хельсинки или Варшаву.');
     if (a.need === 'privacy') reasons.push('Включите Kill Switch и проверьте утечки — обе инструкции есть в справочнике.');
     if (a.need === 'access') reasons.push('Оставьте протокол VLESS + Reality: он выдаётся по умолчанию и не определяется фильтрами.');
-    if (a.term === 'trial') reasons.push('Начните с трёх бесплатных дней — карта не нужна, тариф выберете потом.');
     if (a.term === 'year') reasons.push('Годовая оплата экономит ' +
       Math.round((1 - plan.year / plan.month) * 100) + '% — это ' +
       fmt(plan.month * 12 - plan.year * 12) + ' ' + CONFIG.currency + ' за год.');
-    return { plan: plan, term: term, reasons: reasons, trial: a.term === 'trial' };
+    return { plan: plan, term: term, reasons: reasons };
   }
 
   function initQuiz() {
@@ -517,7 +515,7 @@
           '<div class="stack gap-8">' +
             '<a class="btn btn--primary btn--block" data-tg data-utm="quiz_' + r.plan.id + '" href="#">' +
               '<svg aria-hidden="true"><use href="#i-tg"/></svg>' +
-              (r.trial ? 'Начать бесплатно' : 'Оформить «' + r.plan.name + '»') + '</a>' +
+              'Оформить «' + r.plan.name + '»</a>' +
             '<button class="btn btn--ghost btn--block" type="button" data-restart>Пройти заново</button>' +
           '</div>' +
         '</div>';
