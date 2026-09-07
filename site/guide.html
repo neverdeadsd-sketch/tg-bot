@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Справочник HollVPN — настройка, протоколы, решение проблем</title>
+<meta name="description" content="30 инструкций HollVPN: настройка на iPhone, Android, Windows, macOS, Linux, Android TV и роутерах, разбор протоколов, решение проблем, оплата и безопасность.">
+<meta name="theme-color" content="#060B14" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F4F8FC" media="(prefers-color-scheme: light)">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/main.css">
+<link rel="stylesheet" href="assets/css/guide.css">
+<script>
+  (function () {
+    document.documentElement.classList.add('js');
+    try {
+      var saved = localStorage.getItem('hollvpn-theme');
+      if (saved) document.documentElement.setAttribute('data-theme', saved);
+    } catch (e) {}
+  })();
+</script>
+</head>
+
+<body>
+<a class="skip-link" href="#guideMain">Перейти к статье</a>
+
+<!-- Icon sprite: one HTTP request less than separate files, and the icons
+     inherit currentColor so they follow the theme. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3l7 3v6c0 4.4-3 8.2-7 9-4-.8-7-4.6-7-9V6l7-3z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6L9 17l-5-5"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.6 5.2A9.9 9.9 0 0112 5c6 0 10 7 10 7a17 17 0 01-3.1 3.9M6.2 6.2A17 17 0 002 12s4 7 10 7a9.7 9.7 0 005.4-1.6"/>
+      <path d="M9.9 9.9a3 3 0 004.2 4.2M2 2l20 20"/></symbol>
+    <symbol id="i-devices" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="4" width="14" height="10" rx="2"/><path d="M5 20h7"/><path d="M8.5 14v6"/>
+      <rect x="17" y="9" width="5" height="11" rx="1.5"/></symbol>
+    <symbol id="i-split" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12h5l4-6h9M12 18h9M17 3l4 3-4 3M17 15l4 3-4 3"/></symbol>
+    <symbol id="i-card" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20M6 15h4"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 11.5a8.4 8.4 0 01-9 8.4 9.3 9.3 0 01-3.8-.8L3 21l1.9-4.9A8.3 8.3 0 013 11.5a8.5 8.5 0 019-8.4 8.4 8.4 0 019 8.4z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 018 0v3"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 010 18 15 15 0 010-18z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 5.5A2.5 2.5 0 016.5 3H20v15H6.5A2.5 2.5 0 004 20.5z"/><path d="M4 20.5A2.5 2.5 0 016.5 18H20v3H6.5A2.5 2.5 0 014 20.5z"/></symbol>
+    <symbol id="i-tg" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M21.9 4.3l-3.1 14.6c-.2 1-.9 1.3-1.7.8l-4.7-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.9 8.9-8c.4-.3-.1-.5-.6-.2L6.7 12.6 2 11.1c-1-.3-1-1 .2-1.5l18.4-7.1c.9-.3 1.6.2 1.3 1.8z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 14.2A8.5 8.5 0 019.8 4 8.5 8.5 0 1020 14.2z"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-close-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a9 9 0 11-2.6-6.4M21 4v5h-5"/></symbol>
+  </defs>
+</svg>
+
+<header class="site-header" id="header">
+  <div class="container">
+    <a class="brand" href="index.html" aria-label="HollVPN — на главную">
+      <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <path d="M16 2.6l11 4.7v8.4c0 6.4-4.5 11.9-11 13.7-6.5-1.8-11-7.3-11-13.7V7.3l11-4.7z"
+              fill="url(#bg2)" fill-opacity=".18" stroke="url(#bg2)" stroke-width="1.6"/>
+        <path d="M11 12.5v7M16 10v12M21 12.5v7" stroke="url(#bg2)" stroke-width="2.4" stroke-linecap="round"/>
+        <defs><linearGradient id="bg2" x1="5" y1="3" x2="27" y2="29" gradientUnits="userSpaceOnUse">
+          <stop stop-color="#22D3EE"/><stop offset="1" stop-color="#3B82F6"/></linearGradient></defs>
+      </svg>
+      <span>Holl<b>VPN</b></span>
+    </a>
+
+    <nav class="nav" id="nav" aria-label="Основная навигация">
+      <a href="index.html#features">Возможности</a>
+      <a href="index.html#servers">Серверы</a>
+      <a href="index.html#pricing">Тарифы</a>
+      <a href="guide.html" class="is-current" aria-current="page">Справочник</a>
+      <a href="index.html#faq">Вопросы</a>
+    </nav>
+
+    <div class="header-actions">
+      <button class="search-trigger" data-palette-open type="button">
+        <svg aria-hidden="true"><use href="#i-search"/></svg>
+        <span>Поиск по сайту…</span>
+        <span class="k"><kbd>⌘</kbd><kbd>K</kbd></span>
+      </button>
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Переключить тему">
+        <svg aria-hidden="true" data-theme-icon><use href="#i-moon"/></svg>
+      </button>
+      <a class="btn btn--primary btn--sm" data-tg href="#" data-utm="guide_header">
+        <svg aria-hidden="true"><use href="#i-tg"/></svg>
+        <span class="btn-label">Попробовать</span>
+      </a>
+      <button class="icon-btn burger" id="burger" type="button" aria-label="Меню" aria-expanded="false" aria-controls="nav">
+        <svg aria-hidden="true"><use href="#i-menu"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+  <div class="guide-layout">
+
+    <aside class="guide-side" id="guideSide">
+      <button class="kb-toggle" id="kbToggle" type="button" aria-expanded="false" aria-controls="kbNav">
+        <span>Все статьи справочника</span>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 9l6 6 6-6"/></svg>
+      </button>
+
+      <div class="kb-search">
+        <svg aria-hidden="true"><use href="#i-search"/></svg>
+        <input class="field" type="search" id="kbSearch" placeholder="Фильтр по статьям"
+               autocomplete="off" aria-label="Фильтр по статьям справочника">
+      </div>
+
+      <nav class="kb-nav" id="kbNav" aria-label="Статьи справочника"></nav>
+    </aside>
+
+    <main class="guide-main" id="guideMain">
+      <div class="kb-crumbs" id="kbCrumbs"></div>
+      <article class="kb-article" id="kbArticle"></article>
+
+      <div class="kb-foot">
+        <nav class="kb-nextprev" id="kbNextPrev" aria-label="Соседние статьи"></nav>
+
+        <div class="kb-help">
+          <p><b>Не нашли ответ?</b> Напишите в поддержку — отвечает человек,
+             круглосуточно, медиана ответа 4 минуты.</p>
+          <a class="btn btn--primary" data-tg-support href="#">
+            <svg aria-hidden="true"><use href="#i-chat"/></svg>
+            Написать в поддержку</a>
+        </div>
+      </div>
+    </main>
+
+  </div>
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-bot" style="padding-top:0;border-top:0">
+      <span>© <span id="year">2026</span> HollVPN</span>
+      <a href="guide.html#legal-terms">Оферта</a>
+      <a href="guide.html#legal-privacy">Политика конфиденциальности</a>
+      <a href="guide.html#legal-refund">Возврат средств</a>
+      <span class="spacer"></span>
+      <a href="index.html">На главную</a>
+    </div>
+  </div>
+</footer>
+
+<div class="palette-backdrop" id="palette" hidden role="dialog" aria-modal="true" aria-label="Поиск по справочнику">
+  <div class="palette">
+    <div class="palette-input">
+      <svg aria-hidden="true"><use href="#i-search"/></svg>
+      <input type="text" id="paletteInput" placeholder="Найти статью…"
+             autocomplete="off" spellcheck="false" aria-controls="paletteResults" role="combobox"
+             aria-expanded="true" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </div>
+    <div class="palette-results" id="paletteResults" role="listbox" aria-label="Результаты поиска"></div>
+    <div class="palette-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> выбрать</span>
+      <span><kbd>↵</kbd> перейти</span>
+      <span><kbd>Esc</kbd> закрыть</span>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/kb-data.js"></script>
+<script src="assets/js/app.js"></script>
+<script src="assets/js/guide.js"></script>
+</body>
+</html>
