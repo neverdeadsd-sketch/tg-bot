@@ -39,7 +39,11 @@ async function withRetries(cfg, attempt, onFail) {
   return lastError;
 }
 
-/* Возвращает true, если обязательство сервиса выполнено.
+/* Записи в хранилище ждём через await: на сервере оно синхронное (SQLite),
+ * в Worker — асинхронное (D1). await над обычным значением безвреден,
+ * поэтому один и тот же код работает в обеих средах.
+ *
+ * Возвращает true, если обязательство сервиса выполнено.
  *
  * В режиме auto это значит «бот принял заказ и выдал подписку». В режиме
  * manual — «вам ушло сообщение с данными заказа»: дальше выдаёте руками,
@@ -61,12 +65,12 @@ async function deliver(cfg, store, order, log) {
       (n, e) => log(`заказ ${order.id}: попытка выдачи ${n} не удалась — ${e.message}`));
 
     if (!err) {
-      store.markFulfilled(order.id);
+      await store.markFulfilled(order.id);
       log(`заказ ${order.id}: подписка выдана (${order.days} дн. → ${order.telegram})`);
       return true;
     }
 
-    store.setFulfilError(order.id, err.message);
+    await store.setFulfilError(order.id, err.message);
     log(`ВНИМАНИЕ: заказ ${order.id} оплачен, но подписка не выдана. Требуется ручная выдача.`);
 
     /* Автовыдача сорвалась — это тот случай, ради которого уведомления
@@ -88,12 +92,12 @@ async function deliver(cfg, store, order, log) {
     (n, e) => log(`заказ ${order.id}: попытка уведомления ${n} не удалась — ${e.message}`));
 
   if (!err) {
-    store.markFulfilled(order.id);
+    await store.markFulfilled(order.id);
     log(`заказ ${order.id}: уведомление отправлено (${order.days} дн. → ${order.telegram})`);
     return true;
   }
 
-  store.setFulfilError(order.id, err.message);
+  await store.setFulfilError(order.id, err.message);
   log(`ВНИМАНИЕ: заказ ${order.id} оплачен, уведомление не доставлено. ` +
       `Данные заказа только в базе — смотрите GET /health.`);
   return false;

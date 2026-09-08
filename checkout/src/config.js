@@ -31,6 +31,45 @@ function optional(name, fallback) {
   return v && v.trim() ? v.trim() : fallback;
 }
 
+/* Проверки, общие для сервера и для Worker.
+ *
+ * Принимает готовый объект: на сервере он собран из process.env, в Worker —
+ * из привязок Cloudflare. Бросает исключение с человеческим текстом, если
+ * конфигурация такова, что сервис принимал бы деньги неправильно. */
+function validate(cfg) {
+  if (!cfg.shopId) throw new Error('Не задан YOOKASSA_SHOP_ID');
+  if (!cfg.secretKey) throw new Error('Не задан YOOKASSA_SECRET_KEY');
+  if (!cfg.publicUrl) throw new Error('Не задан PUBLIC_URL');
+
+  cfg.publicUrl = String(cfg.publicUrl).replace(/\/+$/, '');
+  if (!/^https?:\/\//.test(cfg.publicUrl)) {
+    throw new Error('PUBLIC_URL должен начинаться с http:// или https://');
+  }
+  if ((cfg.telegramToken && !cfg.telegramChatId) || (!cfg.telegramToken && cfg.telegramChatId)) {
+    throw new Error('TELEGRAM_BOT_TOKEN и TELEGRAM_ADMIN_CHAT_ID задаются только вместе');
+  }
+
+  const hasTelegram = Boolean(cfg.telegramToken && cfg.telegramChatId);
+  if (!cfg.fulfilmentUrl && !hasTelegram) {
+    throw new Error(
+      'Не настроен ни один способ сообщить об оплате.\n' +
+      '  Задайте FULFILMENT_URL (бот выдаёт подписку сам)\n' +
+      '  или TELEGRAM_BOT_TOKEN вместе с TELEGRAM_ADMIN_CHAT_ID (выдаёте вручную).\n' +
+      '  Сервис не запускается без этого намеренно: иначе он принимал бы\n' +
+      '  деньги, не сообщая об этом никому.'
+    );
+  }
+  if (cfg.fulfilmentUrl && !/^https?:\/\//.test(cfg.fulfilmentUrl)) {
+    throw new Error('FULFILMENT_URL должен начинаться с http:// или https://');
+  }
+
+  // Выдаёт бот или человек — от этого зависит, что мы говорим покупателю.
+  cfg.deliveryMode = cfg.fulfilmentUrl ? 'auto' : 'manual';
+  cfg.hasTelegram = hasTelegram;
+  if (!cfg.terms) cfg.terms = TERMS;
+  return cfg;
+}
+
 function load() {
   const cfg = {
     shopId:    required('YOOKASSA_SHOP_ID'),
@@ -59,6 +98,10 @@ function load() {
     port:   Number(optional('PORT', '8080')),
     dbPath: optional('DB_PATH', './orders.db'),
 
+    // Переопределяются только в тестах.
+    yookassaApi: optional('YOOKASSA_API', ''),
+    telegramApi: optional('TELEGRAM_API', ''),
+
     /* Чек. У самозанятого чек формируется в «Мой налог», а не в ЮKassa,
      * поэтому по умолчанию выключено: передача receipt в магазин, не
      * настроенный на 54-ФЗ, приводит к ошибке создания платежа. */
@@ -83,30 +126,8 @@ function load() {
     terms: TERMS
   };
 
-  if (!/^https?:\/\//.test(cfg.publicUrl)) {
-    throw new Error('PUBLIC_URL должен начинаться с http:// или https://');
-  }
-  if ((cfg.telegramToken && !cfg.telegramChatId) || (!cfg.telegramToken && cfg.telegramChatId)) {
-    throw new Error('TELEGRAM_BOT_TOKEN и TELEGRAM_ADMIN_CHAT_ID задаются только вместе');
-  }
+  validate(cfg);
 
-  var hasTelegram = Boolean(cfg.telegramToken && cfg.telegramChatId);
-  if (!cfg.fulfilmentUrl && !hasTelegram) {
-    throw new Error(
-      'Не настроен ни один способ сообщить об оплате.\n' +
-      '  Задайте FULFILMENT_URL (бот выдаёт подписку сам)\n' +
-      '  или TELEGRAM_BOT_TOKEN вместе с TELEGRAM_ADMIN_CHAT_ID (выдаёте вручную).\n' +
-      '  Сервис не запускается без этого намеренно: иначе он принимал бы\n' +
-      '  деньги, не сообщая об этом никому.'
-    );
-  }
-  if (cfg.fulfilmentUrl && !/^https?:\/\//.test(cfg.fulfilmentUrl)) {
-    throw new Error('FULFILMENT_URL должен начинаться с http:// или https://');
-  }
-
-  // Выдаёт бот или человек — от этого зависит, что мы говорим покупателю.
-  cfg.deliveryMode = cfg.fulfilmentUrl ? 'auto' : 'manual';
-  cfg.hasTelegram = hasTelegram;
   if (!Number.isInteger(cfg.port) || cfg.port < 1 || cfg.port > 65535) {
     throw new Error('PORT должен быть числом от 1 до 65535');
   }
@@ -117,4 +138,4 @@ function rubles(kopecks) {
   return (kopecks / 100).toFixed(2);
 }
 
-module.exports = { load, TERMS, rubles };
+module.exports = { load, validate, TERMS, rubles };

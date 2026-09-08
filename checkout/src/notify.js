@@ -7,7 +7,8 @@
  */
 'use strict';
 
-const API = process.env.TELEGRAM_API || 'https://api.telegram.org';
+/* Адрес — из конфигурации, а не из process.env: модуль работает и в Worker. */
+const DEFAULT_API = 'https://api.telegram.org';
 
 /* Telegram разбирает HTML в сообщении, поэтому имя пользователя и любые
  * другие внешние данные экранируем — иначе сообщение просто не отправится. */
@@ -19,7 +20,7 @@ function esc(v) {
 async function send(cfg, text) {
   if (!cfg.telegramToken || !cfg.telegramChatId) return false;
 
-  const res = await fetch(`${API}/bot${cfg.telegramToken}/sendMessage`, {
+  const res = await fetch(`${cfg.telegramApi || DEFAULT_API}/bot${cfg.telegramToken}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

@@ -1,0 +1,41 @@
+# Конфигурация Cloudflare Worker, принимающего оплату.
+#
+# Секретов здесь нет и быть не должно: YOOKASSA_SECRET_KEY и
+# TELEGRAM_BOT_TOKEN задаются в панели Cloudflare как Secret и в файл
+# не попадают. См. worker/README.md.
+
+name = "hollvpn-checkout"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+# Логика общая с серверным чекаутом: worker/src импортирует модули из
+# checkout/src, написанные для Node. Флаг даёт им привычное окружение.
+compatibility_flags = ["nodejs_compat"]
+
+# Worker отвечает только на /api/*. Всё остальное на домене отдаёт
+# GitHub Pages, как и раньше.
+[[routes]]
+pattern = "hollvpn.ru/api/*"
+zone_name = "hollvpn.ru"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hollvpn-orders"
+# ↓ подставьте id базы, который покажет Cloudflare после её создания
+database_id = "ЗАПОЛНИТЕ-ID-БАЗЫ"
+
+[vars]
+# Адрес сайта: из него собирается return_url после оплаты и он же
+# единственный источник, которому открыт CORS.
+PUBLIC_URL = "https://hollvpn.ru"
+
+# Проверять, что уведомление пришло с адресов ЮKassa. Выключать только
+# при отладке.
+VERIFY_WEBHOOK_IP = "true"
+
+# Куда сообщить об оплате, чтобы выдать доступ. Нужен хотя бы один способ,
+# иначе Worker отвечает 503 и денег не берёт:
+#   FULFILMENT_URL — эндпоинт бота, выдаёт подписку сам
+#   TELEGRAM_BOT_TOKEN + TELEGRAM_ADMIN_CHAT_ID — сообщение вам, выдаёте руками
+# FULFILMENT_URL = "https://ваш-бот/fulfil"
+# TELEGRAM_ADMIN_CHAT_ID = "ваш-id"

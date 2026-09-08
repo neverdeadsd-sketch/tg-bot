@@ -8,12 +8,21 @@
 
 const { rubles } = require('./config');
 
-/* Адрес API. Переопределяется только в тестах — в бою переменная не задаётся
- * и используется настоящий домен ЮKassa. */
-const API = process.env.YOOKASSA_API || 'https://api.yookassa.ru/v3';
+/* Адрес API берём из конфигурации, а не из process.env: тот же модуль
+ * работает и в Cloudflare Worker, где переменные окружения приходят иначе.
+ * Переопределяется только в тестах. */
+const DEFAULT_API = 'https://api.yookassa.ru/v3';
+
+/* btoa есть и в браузерных средах, и в Workers; Buffer — только в Node.
+ * Строка «shopId:secretKey» — латиница и цифры, поэтому побайтовое
+ * преобразование здесь корректно. */
+function base64(str) {
+  if (typeof btoa === 'function') return btoa(str);
+  return Buffer.from(str, 'binary').toString('base64');
+}
 
 function authHeader(cfg) {
-  return 'Basic ' + Buffer.from(`${cfg.shopId}:${cfg.secretKey}`).toString('base64');
+  return 'Basic ' + base64(`${cfg.shopId}:${cfg.secretKey}`);
 }
 
 async function request(cfg, method, path, { body, idempotenceKey } = {}) {
@@ -23,7 +32,7 @@ async function request(cfg, method, path, { body, idempotenceKey } = {}) {
   };
   if (idempotenceKey) headers['Idempotence-Key'] = idempotenceKey;
 
-  const res = await fetch(API + path, {
+  const res = await fetch((cfg.yookassaApi || DEFAULT_API) + path, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,

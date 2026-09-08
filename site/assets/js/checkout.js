@@ -57,6 +57,20 @@
     }
   }
 
+  /* Оплата на сайте может быть недоступна: Worker не развёрнут, выключен
+   * или платёжный сервис не отвечает. Показывать в этом случае сообщение
+   * об ошибке бессмысленно — чинить покупателю нечего. Отправляем туда,
+   * где оплатить можно прямо сейчас. */
+  function toBot(days) {
+    var utm = termByDays(days) ? 'sub_' + days + 'd' : 'checkout';
+    return showResult('tg', 'Оплата — в боте',
+      'Подписка оформляется в Telegram: там же выбор срока, оплата ' +
+      'и выдача доступа сразу после неё.',
+      '<a class="btn btn--primary btn--lg" data-tg data-utm="' + utm + '" href="#">' +
+      '<svg aria-hidden="true"><use href="#i-tg"/></svg>Открыть бота</a>' +
+      '<a class="btn btn--ghost btn--lg" href="index.html#pricing">К тарифам</a>');
+  }
+
   var botButton =
     '<a class="btn btn--primary btn--lg" data-tg data-utm="checkout_done" href="#">' +
     '<svg aria-hidden="true"><use href="#i-tg"/></svg>Открыть бота</a>';
@@ -173,16 +187,23 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ days: term.days, telegram: tg })
       })
-        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (r) {
+          /* 404 — оплата на сайте не развёрнута, 503 — выключена или нечем
+           * выдать, 502 — не отвечает ЮKassa. Эти три покупатель починить
+           * не может, поэтому не сообщение об ошибке, а путь в бота.
+           * Остальные коды (400, 429) адресованы ему — их показываем как есть. */
+          if (r.status === 404 || r.status === 502 || r.status === 503) {
+            throw new Error('checkout unavailable');
+          }
+          return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+        })
         .then(function (res) {
           if (!res.ok || !res.j.confirmation_url) {
             return fail(res.j.error || 'Не удалось создать платёж. Попробуйте оплатить в боте.');
           }
           location.href = res.j.confirmation_url;
         })
-        .catch(function () {
-          fail('Не удалось связаться с сервером оплаты. Попробуйте оплатить в боте.');
-        });
+        .catch(function () { toBot(term.days); });
     });
   }
 
@@ -200,16 +221,7 @@
      * не дозвонилась. Отправляем туда, где деньги действительно принимают.
      * Проверка идёт первой: с ?order=… сюда возвращает ЮKassa, но без API
      * спросить статус заказа всё равно не у кого. */
-    if (!CONFIG.checkoutApi) {
-      var d0 = Number(params.get('days'));
-      var utm = termByDays(d0) ? 'sub_' + d0 + 'd' : 'checkout';
-      return showResult('tg', 'Оплата — в боте',
-        'Подписка оформляется в Telegram: там же выбор срока, оплата ' +
-        'и выдача доступа сразу после неё.',
-        '<a class="btn btn--primary btn--lg" data-tg data-utm="' + utm + '" href="#">' +
-        '<svg aria-hidden="true"><use href="#i-tg"/></svg>Открыть бота</a>' +
-        '<a class="btn btn--ghost btn--lg" href="index.html#pricing">К тарифам</a>');
-    }
+    if (!CONFIG.checkoutApi) return toBot(Number(params.get('days')));
 
     if (orderId) return pollOrder(orderId);
 
