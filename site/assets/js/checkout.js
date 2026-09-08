@@ -34,7 +34,8 @@
   var ICON = {
     ok:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>',
     wait: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9" opacity=".25"/><path d="M12 3a9 9 0 019 9"/></svg>',
-    warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>'
+    warn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v5M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
+    tg:   '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21.9 4.3l-3.1 14.6c-.2 1-.9 1.3-1.7.8l-4.7-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.9 8.9-8c.4-.3-.1-.5-.6-.2L6.7 12.6 2 11.1c-1-.3-1-1 .2-1.5l18.4-7.1c.9-.3 1.6.2 1.3 1.8z"/></svg>'
   };
 
   function showResult(kind, title, text, actions) {
@@ -193,6 +194,23 @@
 
     var params = new URLSearchParams(location.search);
     var orderId = params.get('order');
+
+    /* Оплаты на сайте может не быть: сервис из checkout/ не поднят, и
+     * CONFIG.checkoutApi пуст. Тогда форма бессмысленна — она бы просто
+     * не дозвонилась. Отправляем туда, где деньги действительно принимают.
+     * Проверка идёт первой: с ?order=… сюда возвращает ЮKassa, но без API
+     * спросить статус заказа всё равно не у кого. */
+    if (!CONFIG.checkoutApi) {
+      var d0 = Number(params.get('days'));
+      var utm = termByDays(d0) ? 'sub_' + d0 + 'd' : 'checkout';
+      return showResult('tg', 'Оплата — в боте',
+        'Подписка оформляется в Telegram: там же выбор срока, оплата ' +
+        'и выдача доступа сразу после неё.',
+        '<a class="btn btn--primary btn--lg" data-tg data-utm="' + utm + '" href="#">' +
+        '<svg aria-hidden="true"><use href="#i-tg"/></svg>Открыть бота</a>' +
+        '<a class="btn btn--ghost btn--lg" href="index.html#pricing">К тарифам</a>');
+    }
+
     if (orderId) return pollOrder(orderId);
 
     var d = Number(params.get('days'));

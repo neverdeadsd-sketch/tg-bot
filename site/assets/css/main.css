@@ -1074,6 +1074,7 @@ html:not(.js) .reveal { opacity: 1; transform: none; }
 .co-status-icon svg { width: 28px; height: 28px; }
 .co-status.is-ok   .co-status-icon { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
 .co-status.is-warn .co-status-icon { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
-.co-status.is-wait .co-status-icon { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.co-status.is-wait .co-status-icon,
+.co-status.is-tg   .co-status-icon { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
 .co-status.is-wait .co-status-icon svg { animation: co-spin 1s linear infinite; }
 @keyframes co-spin { to { transform: rotate(360deg); } }

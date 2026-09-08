@@ -1,0 +1,62 @@
+# Публикация сайта на GitHub Pages.
+#
+# Сайт — статика без сборки: каталог site/ выкладывается как есть.
+# Перед выкладкой прогоняется scripts/check-site.sh; он же запускается
+# на pull request, чтобы сломанное не доезжало до main.
+#
+# Чтобы это заработало, в репозитории нужно один раз включить
+# Settings → Pages → Source: GitHub Actions.
+
+name: Сайт
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'scripts/check-site.sh'
+      - '.github/workflows/site.yml'
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'scripts/check-site.sh'
+      - '.github/workflows/site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Публикация одна на репозиторий: параллельные выкладки не нужны,
+# но и обрывать начатую нельзя — иначе Pages останется в промежуточном виде.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Проверка
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Сайт не тянет ничего извне, ссылки не битые
+        run: bash scripts/check-site.sh
+
+  deploy:
+    name: Публикация
+    needs: check
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
