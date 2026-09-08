@@ -203,3 +203,21 @@
 }
 .kb-toggle svg { width: 15px; height: 15px; transition: transform .25s var(--ease); }
 .guide-side.is-open .kb-toggle svg { transform: rotate(180deg); }
+
+/* --------------------------------------------------- юридические статьи */
+
+.kb-meta {
+  font-size: .82rem; color: var(--faint);
+  padding-bottom: 18px; margin-bottom: 26px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+/* Незаполненный реквизит подсвечен, чтобы прочерк в оферте бросался
+   в глаза и на странице, и на скриншоте. */
+.legal-blank {
+  padding: 0 6px; border-radius: 4px;
+  background: color-mix(in srgb, var(--warn) 22%, transparent);
+  color: var(--warn); font-weight: 600;
+}
+
+.kb-article .kb-table th { font-weight: 560; color: var(--fg-2); white-space: nowrap; }

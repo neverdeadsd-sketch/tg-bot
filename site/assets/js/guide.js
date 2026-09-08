@@ -75,6 +75,39 @@
     });
   }
 
+  /* Реквизиты живут в CONFIG (app.js), а не в тексте статей: их нужно
+   * вписать один раз, а встречаются они в четырнадцати местах. Пока ФИО
+   * не заполнено, над документом висит предупреждение — чтобы оферта
+   * с прочерками не уехала в продакшн незамеченной. */
+  function fillLegal(scope, article) {
+    var cfg = (window.HollApp && window.HollApp.CONFIG && window.HollApp.CONFIG.legal) || {};
+    var slots = $$('[data-legal]', scope);
+    if (!slots.length) return;
+
+    slots.forEach(function (el) {
+      var v = cfg[el.getAttribute('data-legal')];
+      if (v) { el.textContent = v; el.classList.remove('legal-blank'); }
+      else { el.textContent = '—'; el.classList.add('legal-blank'); }
+    });
+
+    if (cfg.name && cfg.inn && cfg.email) return;
+
+    var missing = [];
+    if (!cfg.name)  missing.push('ФИО');
+    if (!cfg.inn)   missing.push('ИНН');
+    if (!cfg.email) missing.push('электронную почту');
+
+    var warn = document.createElement('div');
+    warn.className = 'callout callout--warn';
+    warn.innerHTML = '<b>Документ не готов к публикации.</b> Не заполнены реквизиты: ' +
+      missing.join(', ') + '. Впишите их в <code>CONFIG.legal</code> ' +
+      '(<code>assets/js/app.js</code>) — они подставятся во все документы, ' +
+      'и это предупреждение исчезнет.';
+    var after = scope.querySelector('.kb-summary');
+    if (after) after.insertAdjacentElement('afterend', warn);
+    else scope.insertBefore(warn, scope.firstChild);
+  }
+
   function render(id) {
     var i = FLAT.findIndex(function (e) { return e.article.id === id; });
     if (i < 0) i = 0;
@@ -88,6 +121,7 @@
     host.innerHTML = '<h1>' + a.title + '</h1>' +
                      '<p class="kb-summary">' + a.summary + '</p>' + a.body;
     copyButtons(host);
+    fillLegal(host, a);
 
     var prev = FLAT[i - 1], next = FLAT[i + 1];
     nextPrev.innerHTML =
