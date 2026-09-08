@@ -397,7 +397,7 @@ kbd {
 
 .nav { display: flex; gap: 4px; margin-inline: auto; }
 .nav a {
-  padding: 8px 13px; border-radius: var(--r-sm);
+  padding: 8px 11px; border-radius: var(--r-sm);
   font-size: .9rem; font-weight: 540; color: var(--muted);
   transition: color .2s, background-color .2s;
 }
@@ -416,18 +416,24 @@ kbd {
 .icon-btn:hover { color: var(--fg); border-color: var(--faint); background: var(--surface); }
 .icon-btn svg { width: 17px; height: 17px; }
 
-/* The search affordance doubles as the discoverability hint for Cmd-K. */
+/* Кнопка поиска же подсказывает про ⌘K.
+   Раньше у неё было min-width: 232px и надпись «Поиск по сайту…».
+   Вместе с меню из семи пунктов и кнопкой действия шапке требовалось
+   1246px, а контейнер даёт 1136 — она выезжала за край на любой ширине,
+   просто на широких экранах перелив был не виден. Оставлена иконка и ⌘K:
+   подсказка на месте, а ширина падает с 232px до ~86. */
 .search-trigger {
-  display: inline-flex; align-items: center; gap: 10px;
-  min-width: 232px; padding: 8px 8px 8px 13px; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 10px; white-space: nowrap;
   border: 1px solid var(--line); border-radius: var(--r-sm);
   background: var(--bg-2); color: var(--faint);
   font-size: .87rem; cursor: pointer; text-align: left;
   transition: border-color .2s, color .2s;
 }
+.search-trigger > span:not(.k) { display: none; }
 .search-trigger:hover { border-color: var(--faint); color: var(--muted); }
 .search-trigger svg { width: 15px; height: 15px; flex: none; }
-.search-trigger .k { margin-left: auto; display: flex; gap: 3px; }
+.search-trigger .k { display: flex; gap: 3px; }
 
 .burger { display: none; }
 
@@ -944,14 +950,9 @@ html:not(.js) .reveal { opacity: 1; transform: none; }
   .bento .span-6 { grid-column: span 6; }
 }
 
-@media (max-width: 860px) {
-  .nav, .search-trigger { display: none; }
+@media (max-width: 1180px) {
+  .nav { display: none; }
   .burger { display: grid; }
-  .steps { grid-template-columns: 1fr; }
-  /* Stacked, the pricing controls read better flush left than flush right. */
-  .pricing-head > .stack { align-items: flex-start; width: 100%; }
-  .save-hint { text-align: left; }
-  .step::after { display: none; }
 
   /* Slide-down sheet rather than a full-screen takeover: the page stays
      visible behind it, so the user keeps their place. */
@@ -967,12 +968,27 @@ html:not(.js) .reveal { opacity: 1; transform: none; }
   .nav.is-open a { padding: 12px 10px; font-size: 1rem; }
 }
 
+@media (max-width: 860px) {
+  .steps { grid-template-columns: 1fr; }
+  /* Stacked, the pricing controls read better flush left than flush right. */
+  .pricing-head > .stack { align-items: flex-start; width: 100%; }
+  .save-hint { text-align: left; }
+  .step::after { display: none; }
+}
+
 @media (max-width: 620px) {
   /* The header CTA keeps its place but drops to the Telegram glyph alone —
      at 390px the label pushed the burger off the screen. */
   .site-header .btn-label { display: none; }
   .site-header .btn--sm { padding: 9px 12px; }
   .header-actions { gap: 6px; }
+  /* На телефоне ⌘K нажать нечем — от кнопки поиска остаётся лупа. */
+  .search-trigger .k { display: none; }
+  .search-trigger { padding: 8px; }
+  /* Марка тоже ужимается: на 320px из-за неё шапка не сходилась. */
+  .brand { font-size: 1rem; gap: 8px; }
+  .brand-mark { width: 26px; height: 26px; }
+  .site-header .container { gap: 12px; }
   .globe-stage { max-width: 400px; }
 
   .bento > *, .bento .span-3, .bento .span-4, .bento .span-6 { grid-column: span 6; }

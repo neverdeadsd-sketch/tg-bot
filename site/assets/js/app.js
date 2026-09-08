@@ -847,10 +847,6 @@
 
     var y = $('#year');
     if (y) y.textContent = String(new Date().getFullYear());
-
-    // На узких экранах поле поиска прячется, но иконка должна остаться.
-    var icon = $('#searchIconBtn');
-    if (icon && matchMedia('(max-width: 860px)').matches) icon.style.display = '';
   }
 
   if (document.readyState === 'loading') {
