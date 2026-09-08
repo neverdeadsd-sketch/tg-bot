@@ -21,6 +21,11 @@ import fulfil from '../../checkout/src/fulfil.js';
 const { rubles } = sharedConfig;
 const { deliver } = fulfil;
 
+/* Именованных экспортов у этого модуля быть не должно: среда Workers
+ * считает каждый из них обработчиком и отказывается запускать Worker,
+ * если экспорт — не функция («Incorrect type for map entry»). Сборка
+ * такое пропускает, падает только запуск. Поэтому здесь только
+ * export default. */
 const TELEGRAM_RE = /^@?[A-Za-z0-9_]{5,32}$/;
 const EMAIL_RE = /^[^@\s]+@[^@\s.]+\.[^@\s]{2,}$/;
 const MAX_BODY = 64 * 1024;
@@ -273,5 +278,3 @@ export default {
     }
   }
 };
-
-export { TELEGRAM_RE, EMAIL_RE, CHECKOUT_LIMIT, CHECKOUT_WINDOW_MS };

@@ -5,3 +5,8 @@ coverage/
 .env
 .env.local
 npm-debug.log*
+
+# Локальные секреты и кэш wrangler для Worker.
+# .dev.vars — то же, что .env, но для `wrangler dev`: в репозиторий ему нельзя.
+.dev.vars
+.wrangler/
