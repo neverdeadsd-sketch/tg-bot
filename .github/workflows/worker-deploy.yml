@@ -1,0 +1,65 @@
+# Разворачивание Worker'а оплаты из Actions.
+#
+# Зачем, если Cloudflare умеет собирать из репозитория сам: его сборка
+# видна только в панели Cloudflare, и когда она молча разворачивает
+# репозиторий как статику (незаполненный Root directory), понять это
+# со стороны невозможно — на все маршруты приходит пустой 404.
+# Здесь лог виден целиком и всем.
+
+name: Развернуть оплату
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      # Worker собирается из обеих папок: логика работы с деньгами общая.
+      - 'worker/**'
+      - 'checkout/src/**'
+      - '.github/workflows/worker-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: wrangler deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверить, что доступ настроен
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          missing=''
+          [ -z "$TOKEN" ]   && missing="$missing CLOUDFLARE_API_TOKEN"
+          [ -z "$ACCOUNT" ] && missing="$missing CLOUDFLARE_ACCOUNT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Не заданы секреты репозитория:$missing"
+            echo "Settings → Secrets and variables → Actions → New repository secret"
+            exit 1
+          fi
+          echo 'Доступ настроен.'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Тесты перед разворачиванием
+        run: node --test
+        working-directory: worker
+
+      - name: Развернуть
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: worker
+        run: |
+          npm ci --omit=dev --ignore-scripts >/dev/null 2>&1 || npm install --no-save wrangler@4.130.0
+          npx wrangler@4.130.0 deploy
