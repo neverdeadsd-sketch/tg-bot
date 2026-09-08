@@ -12,11 +12,21 @@ compatibility_date = "2026-09-01"
 # checkout/src, написанные для Node. Флаг даёт им привычное окружение.
 compatibility_flags = ["nodejs_compat"]
 
+# Служебный адрес вида hollvpn-checkout.<ваш>.workers.dev. Нужен, чтобы
+# проверить Worker до того, как домен заведён в Cloudflare. Когда всё
+# заработает на своём домене, можно поставить false.
+workers_dev = true
+
 # Worker отвечает только на /api/*. Всё остальное на домене отдаёт
 # GitHub Pages, как и раньше.
-[[routes]]
-pattern = "hollvpn.ru/api/*"
-zone_name = "hollvpn.ru"
+#
+# ↓ Раскомментируйте ПОСЛЕ того, как hollvpn.ru заведён в Cloudflare.
+#   До этого wrangler откажется разворачивать: зоны ещё нет, и маршрут
+#   привязать не к чему.
+#
+# [[routes]]
+# pattern = "hollvpn.ru/api/*"
+# zone_name = "hollvpn.ru"
 
 [[d1_databases]]
 binding = "DB"
