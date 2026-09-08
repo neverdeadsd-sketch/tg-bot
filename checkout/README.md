@@ -160,6 +160,16 @@ node src\index.js
 сертификат. Разделы про nginx и systemd оставлены для тех, кто ставит руками
 или разбирается, что именно скрипт сделал. См. `deploy/README.md`.
 
+## Команды в PowerShell
+
+В Windows `curl` — это псевдоним `Invoke-WebRequest` с другими ключами,
+поэтому команды вида `curl -i ...` там не работают: PowerShell не поймёт
+ключ и спросит `Uri`. Пишите `curl.exe`:
+
+```powershell
+curl.exe -i https://hollvpn.online/api/payment/test
+```
+
 ## Nginx
 
 Сайт статикой, `/api` на этот сервис:
