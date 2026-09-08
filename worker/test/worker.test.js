@@ -388,6 +388,25 @@ test('без способа сообщить об оплате деньги не
   } finally { net.restore(); }
 });
 
+test('состояние называет, какой настройки не хватает', async () => {
+  const net = stubFetch();
+  const db = fakeD1();
+  const env = { ...BASE_ENV, FULFILMENT_URL: '' };      // и Telegram не задан
+  try {
+    const { res, json } = await call(env, db, req('/api/health'));
+    assert.equal(res.status, 503);
+    assert.equal(json.status, 'not_configured');
+    assert.match(json.error, /FULFILMENT_URL/);
+    assert.match(json.error, /TELEGRAM_BOT_TOKEN/);
+
+    // А на прочих маршрутах причина не раскрывается.
+    const other = await call(env, db, req('/api/nope'));
+    assert.equal(other.res.status, 503);
+    assert.equal(other.json.status, undefined);
+    assert.match(other.json.error, /боте/);
+  } finally { net.restore(); }
+});
+
 test('без привязанной базы деньги не принимаются', async () => {
   const net = stubFetch();
   try {
