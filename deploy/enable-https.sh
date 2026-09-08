@@ -88,10 +88,16 @@ bold "Проверяю, что nginx отдаёт домен"
 
 if ! systemctl is-active --quiet nginx; then
   die "nginx не запущен. Сначала поднимите его:
+      nginx -t                  # что именно не так с конфигурацией
       systemctl start nginx
       systemctl status nginx --no-pager
+
   Если не стартует из-за занятого порта — посмотрите, кто его держит:
-      ss -lntp | grep ':80 '"
+      ss -lntp | grep ':80 '
+
+  Если конфигурацию сломал прошлый запуск certbot --nginx — рядом лежат
+  резервные копии, можно вернуть последнюю:
+      ls -t $NGINX_CONF.bak.* | head -3"
 fi
 
 PORT80=""
