@@ -25,6 +25,29 @@ node src/index.js
 npm test                  # 12 тестов, сети не требуют
 ```
 
+## Проверка на своём компьютере (Windows)
+
+Команды выше — для Linux-сервера. Чтобы посмотреть, как это работает, у себя
+на машине, нужен только Node 22.5 или новее (`node --version`); ставится
+с nodejs.org.
+
+В PowerShell:
+
+```powershell
+git clone https://github.com/neverdeadsd-sketch/tg-bot.git
+cd tg-bot\checkout
+Copy-Item .env.example .env
+notepad .env          # заполнить и сохранить
+node src\index.js
+```
+
+`chmod` и `nano` в PowerShell не существуют: права на файл там настраиваются
+иначе, а вместо `nano` — `notepad`. Тесты запускаются так же: `npm test`.
+
+Для проверки без настоящей ЮKassa хватит любых значений в `.env` —
+сервис поднимется и ответит на `http://localhost:8080/health`. Реальные
+платежи потребуют ключ и публичный адрес, доступный ЮKassa снаружи.
+
 ## Почему сервис не стартует без FULFILMENT_URL
 
 Это сделано намеренно. Чекаут, который умеет принять деньги и не умеет выдать
