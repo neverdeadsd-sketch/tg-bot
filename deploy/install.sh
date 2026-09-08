@@ -257,20 +257,28 @@ ok "nginx настроен на $DOMAIN"
 
 # ------------------------------------------------------------ сертификат ---
 
+HTTPS_ON=0
+
+# Сертификатом и HTTPS занимается отдельный скрипт: он единственный, кто
+# трогает TLS-конфигурацию, и делает это через webroot — certbot не правит
+# конфигурацию nginx и не перезапускает его.
 if [ -n "$DOMAIN_IP" ] && [ "${DOMAIN_IP}" = "${SERVER_IP:-$DOMAIN_IP}" ]; then
-  say "Получаю сертификат Let's Encrypt"
-  dpkg -s certbot >/dev/null 2>&1 || apt-get install -y -qq certbot python3-certbot-nginx
-  if certbot certificates 2>/dev/null | grep -q "$DOMAIN"; then
-    ok "сертификат для $DOMAIN уже есть"
+  say "Включаю HTTPS"
+  if DOMAIN="$DOMAIN" SITE_DIR="$SITE_DIR" PORT="$PORT" NGINX_CONF="$NGINX_CONF" \
+       bash "$APP_DIR/deploy/enable-https.sh"; then
+    HTTPS_ON=1
   else
-    certbot --nginx -d "$DOMAIN" -d "www.$DOMAIN" --non-interactive --agree-tos \
-      --register-unsafely-without-email --redirect || \
-      warn "certbot не справился — запустите вручную: certbot --nginx -d $DOMAIN"
+    warn "HTTPS включить не удалось — сайт пока работает по HTTP"
+    warn "разберитесь по сообщению выше и запустите снова:"
+    warn "    sudo DOMAIN=$DOMAIN bash $APP_DIR/deploy/enable-https.sh"
   fi
 else
-  warn "сертификат пропущен: домен пока не указывает на этот сервер"
-  warn "после настройки DNS выполните: certbot --nginx -d $DOMAIN -d www.$DOMAIN"
+  warn "HTTPS пропущен: домен пока не указывает на этот сервер"
+  warn "после настройки DNS выполните:"
+  warn "    sudo DOMAIN=$DOMAIN bash $APP_DIR/deploy/enable-https.sh"
 fi
+
+if [ "$HTTPS_ON" = "1" ]; then SITE_URL="https://$DOMAIN"; else SITE_URL="http://$DOMAIN"; fi
 
 # ----------------------------------------------------------------- итог ----
 
@@ -300,7 +308,7 @@ fi
 
 if [ -n "$MISSING" ]; then
   systemctl enable hollvpn-checkout >/dev/null 2>&1 || true
-  printf '\n\033[1;33mСайт уже открывается: https://%s\033[0m\n' "$DOMAIN"
+  printf '\n\033[1;33mСайт уже открывается: %s\033[0m\n' "$SITE_URL"
   printf '\nОплата пока не включена — в %s не заполнено:%s\n' "$ENV_FILE" "$MISSING"
   cat <<NEXT
 
@@ -330,7 +338,7 @@ else
   sleep 2
   if systemctl is-active --quiet hollvpn-checkout; then
     ok "служба запущена"
-    printf '\n\033[1;32mГотово: https://%s\033[0m\n\n' "$DOMAIN"
+    printf '\n\033[1;32mГотово: %s\033[0m\n\n' "$SITE_URL"
   else
     warn "служба не поднялась — смотрите: journalctl -u hollvpn-checkout -n 30"
   fi
