@@ -100,6 +100,45 @@ ask FULFILMENT_URL \
   Нет такого — пропустите: будете получать уведомление в Telegram и выдавать
   вручную. Добавить можно потом, запустив этот скрипт снова."
 
+# ------------------------------------------------- проверка уведомлений --
+
+# Канал уведомлений проверяем сейчас, а не при первой продаже: неверный
+# токен или id обнаружатся тогда, когда деньги уже пришли, а сообщения нет.
+send_test_message() {
+  local token="$1" chat="$2" code
+  code="$(curl -s -o /tmp/tg-test.json -w '%{http_code}' --max-time 15 \
+    -X POST "https://api.telegram.org/bot${token}/sendMessage" \
+    -H 'Content-Type: application/json' \
+    -d "{\"chat_id\":\"${chat}\",\"text\":\"✅ HollVPN: уведомления настроены. Сюда будут приходить оплаты.\"}" \
+    2>/dev/null || echo 000)"
+  printf '%s' "$code"
+}
+
+TG_TOKEN_NOW="$(current TELEGRAM_BOT_TOKEN)"
+TG_CHAT_NOW="$(current TELEGRAM_ADMIN_CHAT_ID)"
+
+if [ -n "$TG_TOKEN_NOW" ] && [ -n "$TG_CHAT_NOW" ]; then
+  printf '\n'
+  bold "Отправляю пробное сообщение в Telegram"
+  CODE="$(send_test_message "$TG_TOKEN_NOW" "$TG_CHAT_NOW")"
+  case "$CODE" in
+    200)
+      ok "доставлено — проверьте, пришло ли сообщение в Telegram" ;;
+    401)
+      warn "Telegram не принял токен (401). Проверьте TELEGRAM_BOT_TOKEN у @BotFather" ;;
+    400)
+      warn "Telegram отклонил запрос (400) — обычно это неверный chat id"
+      warn "или вы ещё не написали боту: откройте его и нажмите «Старт»"
+      [ -f /tmp/tg-test.json ] && warn "ответ: $(head -c 200 /tmp/tg-test.json)" ;;
+    000)
+      warn "не удалось связаться с api.telegram.org — проверьте сеть сервера" ;;
+    *)
+      warn "Telegram ответил $CODE"
+      [ -f /tmp/tg-test.json ] && warn "ответ: $(head -c 200 /tmp/tg-test.json)" ;;
+  esac
+  rm -f /tmp/tg-test.json
+fi
+
 # --------------------------------------------------------------- проверка --
 
 chown "$SERVICE_USER:$SERVICE_USER" "$ENV_FILE" 2>/dev/null || true

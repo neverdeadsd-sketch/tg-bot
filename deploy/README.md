@@ -87,6 +87,28 @@ sudo systemctl restart hollvpn-checkout
 sudo systemctl status hollvpn-checkout
 ```
 
+## Проверка перед первой продажей
+
+```bash
+# служба жива
+systemctl status hollvpn-checkout
+curl localhost:8080/health          # {"status":"ok","stranded_orders":0}
+
+# уведомления доходят
+sudo bash /opt/hollvpn/deploy/test-notify.sh
+
+# сайт и API доступны снаружи (выполните на своём компьютере)
+curl -i https://hollvpn.online/api/payment/нет-такого   # ждём 404 и JSON
+```
+
+Последняя команда важнее, чем кажется: она проверяет всю цепочку —
+DNS, сертификат, nginx и проксирование `/api`. Если тут не 404, а ошибка
+соединения, то и ЮKassa до вебхука не достучится.
+
+`set-env.sh` отправляет пробное сообщение сам, сразу после настройки
+Telegram. Неверный токен обнаружится там же, а не в момент, когда деньги
+пришли, а сообщения нет.
+
 ## Обновление
 
 ```bash
