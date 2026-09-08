@@ -4,7 +4,11 @@
 # TELEGRAM_BOT_TOKEN задаются в панели Cloudflare как Secret и в файл
 # не попадают. См. worker/README.md.
 
-name = "hollvpn-checkout"
+# Имя должно совпадать с именем Worker'а в Cloudflare: wrangler
+# разворачивает Worker по этому имени, и при расхождении завёл бы второй —
+# пустой, без заданных в панели секретов. Переименовать Worker в Cloudflare
+# нельзя, только пересоздать, поэтому подстраиваемся здесь.
+name = "tg-bot"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
 
