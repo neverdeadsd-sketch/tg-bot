@@ -882,23 +882,6 @@ input[type="range"]::-moz-range-thumb {
 .qr-copy { min-width: 200px; flex: 1; }
 .qr-copy p { color: var(--muted); font-size: .9rem; margin-bottom: 12px; }
 
-/* ------------------------------------------------------------ quotes */
-
-.quotes { display: grid; gap: 16px; grid-template-columns: repeat(3, 1fr); }
-.quote p { font-size: .96rem; color: var(--fg-2); margin-bottom: 18px; }
-.quote p::before { content: "«"; color: var(--accent); }
-.quote p::after  { content: "»"; color: var(--accent); }
-.quote footer { display: flex; align-items: center; gap: 11px; }
-.quote .av {
-  width: 34px; height: 34px; border-radius: 50%; flex: none;
-  display: grid; place-items: center;
-  background: var(--grad-accent); color: var(--accent-ink);
-  font-weight: 700; font-size: .84rem;
-}
-.quote .who { font-size: .87rem; font-weight: 580; }
-.quote .when { font-size: .78rem; color: var(--faint); }
-.stars { color: var(--warn); font-size: .82rem; letter-spacing: .1em; margin-bottom: 12px; }
-
 /* ------------------------------------------------------------------ CTA */
 
 .cta-band {
@@ -964,7 +947,7 @@ html:not(.js) .reveal { opacity: 1; transform: none; }
 @media (max-width: 860px) {
   .nav, .search-trigger { display: none; }
   .burger { display: grid; }
-  .plans, .quotes, .steps { grid-template-columns: 1fr; }
+  .steps { grid-template-columns: 1fr; }
   /* Stacked, the pricing controls read better flush left than flush right. */
   .pricing-head > .stack { align-items: flex-start; width: 100%; }
   .save-hint { text-align: left; }
