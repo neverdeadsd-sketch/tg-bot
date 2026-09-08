@@ -7,7 +7,7 @@
  */
 'use strict';
 
-const RETRIES = [0, 2000, 8000, 30000];   // четыре попытки, растущие паузы
+const DEFAULT_RETRIES = [0, 2000, 8000, 30000];   // четыре попытки, растущие паузы
 
 async function post(cfg, payload) {
   const headers = { 'Content-Type': 'application/json' };
@@ -41,9 +41,10 @@ async function deliver(cfg, store, order, log) {
     paid_at: new Date().toISOString()
   };
 
+  const retries = cfg.fulfilRetries || DEFAULT_RETRIES;
   let lastError = null;
-  for (let i = 0; i < RETRIES.length; i++) {
-    if (RETRIES[i]) await sleep(RETRIES[i]);
+  for (let i = 0; i < retries.length; i++) {
+    if (retries[i]) await sleep(retries[i]);
     try {
       await post(cfg, payload);
       store.markFulfilled(order.id);

@@ -13,6 +13,10 @@ const { create } = require('../src/server');
 const net = require('../src/net');
 const { TERMS } = require('../src/config');
 
+/* Настоящий fetch фиксируем один раз: если захватывать его внутри хелпера,
+ * туда попадёт уже подменённый, и стаб останется висеть на весь прогон. */
+const REAL_FETCH = globalThis.fetch;
+
 const CFG = {
   shopId: '139865',
   secretKey: 'test-secret',
@@ -24,16 +28,17 @@ const CFG = {
   sendReceipt: false,
   receiptEmailRequired: false,
   verifyWebhookIp: false,
+  trustProxy: false,
+  fulfilRetries: [0, 10, 20],
   terms: TERMS
 };
 
 /* Подменяем сеть целиком: тесты не должны ходить ни в ЮKassa, ни в выдачу. */
 function stubFetch({ payments = {}, onFulfil = () => ({ ok: true }) } = {}) {
   const calls = { created: [], fulfilled: [] };
-  const real = globalThis.fetch;
   globalThis.fetch = async (url, opts = {}) => {
     // Запросы самого теста к поднятому серверу должны идти по-настоящему.
-    if (String(url).startsWith('http://127.0.0.1:')) return real(url, opts);
+    if (String(url).startsWith('http://127.0.0.1:')) return REAL_FETCH(url, opts);
     const body = opts.body ? JSON.parse(opts.body) : null;
 
     if (String(url).includes('/v3/payments') && opts.method === 'POST') {
@@ -76,9 +81,8 @@ async function withServer(fn, opts) {
   server.listen(0);
   await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}`;
-  const real = globalThis.fetch;
   try { await fn({ base, db, stub }); }
-  finally { globalThis.fetch = real; server.close(); db.close(); }
+  finally { globalThis.fetch = REAL_FETCH; server.close(); db.close(); }
 }
 
 const post = (base, path, body) =>
@@ -232,6 +236,43 @@ test('конфигурация не поднимается без адреса �
   process.env.FULFILMENT_URL = 'https://bot.example/fulfil';
   assert.ok(load().fulfilmentUrl);
   Object.assign(process.env, saved);
+});
+
+test('за прокси адрес берётся из X-Real-IP, но только с TRUST_PROXY', async () => {
+  const withProxy = Object.assign({}, CFG, { verifyWebhookIp: true, trustProxy: true });
+  const noProxy   = Object.assign({}, CFG, { verifyWebhookIp: true, trustProxy: false });
+
+  /* 403 — отсечено по адресу источника. 500 — адрес принят, но платёж
+     подтвердить не удалось; значит проверка источника пройдена, а это
+     и проверяем. В сеть при этом не ходим. */
+  const cases = [
+    [withProxy, '185.71.76.10', 500, 'адрес ЮKassa из X-Real-IP проходит проверку'],
+    [withProxy, '203.0.113.7',  403, 'посторонний адрес из X-Real-IP отклоняется'],
+    [noProxy,   '185.71.76.10', 403, 'без TRUST_PROXY заголовку верить нельзя']
+  ];
+
+  for (const [cfg, header, expect, why] of cases) {
+    const db = store.open(':memory:');
+    const server = create(cfg, db);
+    server.listen(0);
+    await once(server, 'listening');
+    const port = server.address().port;
+
+    globalThis.fetch = async (url, opts) =>
+      String(url).startsWith(`http://127.0.0.1:${port}`)
+        ? REAL_FETCH(url, opts)
+        : Promise.reject(new Error('сеть в тестах недоступна'));
+
+    const res = await REAL_FETCH(`http://127.0.0.1:${port}/api/yookassa/webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Real-IP': header },
+      body: JSON.stringify({ object: { id: 'pay_x' } })
+    });
+    assert.equal(res.status, expect, why);
+
+    globalThis.fetch = REAL_FETCH;
+    server.close(); db.close();
+  }
 });
 
 test('адреса уведомлений ЮKassa проверяются', () => {

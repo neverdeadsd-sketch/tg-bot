@@ -19,6 +19,16 @@ const TELEGRAM_RE = /^@?[A-Za-z0-9_]{5,32}$/;
 const EMAIL_RE = /^[^@\s]+@[^@\s.]+\.[^@\s]{2,}$/;
 const MAX_BODY = 64 * 1024;
 
+/* Настоящий адрес клиента. Заголовку X-Real-IP верим только когда прокси
+ * объявлен своим: иначе любой сможет назваться адресом ЮKassa. */
+function clientIp(req, cfg) {
+  if (cfg.trustProxy) {
+    const h = req.headers['x-real-ip'] || req.headers['x-forwarded-for'];
+    if (h) return String(h).split(',')[0].trim();
+  }
+  return (req.socket && req.socket.remoteAddress) || '';
+}
+
 function log(...args) {
   console.log(new Date().toISOString(), ...args);
 }
@@ -208,7 +218,7 @@ function create(cfg, store) {
   }
 
   const server = http.createServer(async (req, res) => {
-    const ip = (req.socket && req.socket.remoteAddress) || '';
+    const ip = clientIp(req, cfg);
     const url = new URL(req.url, 'http://localhost');
     cors(req, res);
 
