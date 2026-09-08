@@ -9,7 +9,7 @@
 #
 set -euo pipefail
 
-DOMAIN="${DOMAIN:-hollvpn.online}"
+DOMAIN="${DOMAIN:-hollvpn.ru}"
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 ok()   { printf '  \033[0;32m✓\033[0m %s\n' "$*"; }

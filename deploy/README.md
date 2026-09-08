@@ -5,7 +5,7 @@
 
 ## Что нужно заранее
 
-1. **A-запись** домена `hollvpn.online` (и `www`) на IP сервера. Без этого
+1. **A-запись** домена `hollvpn.ru` (и `www`) на IP сервера. Без этого
    всё поставится, но сертификат не выпустится — скрипт скажет об этом
    и продолжит.
 2. **Доступ root** по SSH.
@@ -115,7 +115,7 @@ sudo bash /opt/hollvpn/deploy/enable-https.sh
 
 Скрипт сам проверит, что домен указывает именно на этот сервер, и только
 тогда выпустит сертификат — иначе certbot падает с ошибкой, по которой
-причину не угадать. Проверить, разошлось ли: `getent ahostsv4 hollvpn.online`.
+причину не угадать. Проверить, разошлось ли: `getent ahostsv4 hollvpn.ru`.
 
 ## Проверка перед первой продажей
 
@@ -135,14 +135,14 @@ sudo bash /opt/hollvpn/deploy/test-notify.sh
 Linux или macOS:
 
 ```bash
-curl -i https://hollvpn.online/api/payment/test
+curl -i https://hollvpn.ru/api/payment/test
 ```
 
 Windows, PowerShell — именно `curl.exe`, потому что `curl` там подменён
 на `Invoke-WebRequest` с другими ключами:
 
 ```powershell
-curl.exe -i https://hollvpn.online/api/payment/test
+curl.exe -i https://hollvpn.ru/api/payment/test
 ```
 
 Ждём `404` и `{"error":"Заказ не найден"}`. Это важнее, чем кажется:

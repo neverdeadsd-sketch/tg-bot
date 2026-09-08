@@ -915,7 +915,7 @@ domain-suffix:sberbank.ru</code></pre>
 ИНН <span data-legal="inn">—</span>.</p>
 <p><b>Пользователь:</b> дееспособное физическое лицо, принявшее условия
 настоящей оферты.</p>
-<p>Оферта размещена по адресу <code>hollvpn.online</code> и действует
+<p>Оферта размещена по адресу <code>hollvpn.ru</code> и действует
 до её отзыва или замены новой редакцией.</p>
 
 <h3>2. Предмет договора</h3>
@@ -1029,7 +1029,7 @@ Telegram-бота сервиса с использованием платёжн�
     <tr><th>Статус</th><td>Самозанятый (плательщик НПД)</td></tr>
     <tr><th>ИНН</th><td><span data-legal="inn">—</span></td></tr>
     <tr><th>Электронная почта</th><td><span data-legal="email">—</span></td></tr>
-    <tr><th>Сайт</th><td>hollvpn.online</td></tr>
+    <tr><th>Сайт</th><td>hollvpn.ru</td></tr>
   </tbody>
 </table>
 </div>`

@@ -10,7 +10,7 @@
 #
 set -euo pipefail
 
-DOMAIN="${DOMAIN:-hollvpn.online}"
+DOMAIN="${DOMAIN:-hollvpn.ru}"
 APP_DIR="${APP_DIR:-/opt/hollvpn}"
 SITE_DIR="${SITE_DIR:-/var/www/hollvpn}"
 SERVICE_USER="${SERVICE_USER:-hollvpn}"
@@ -135,7 +135,26 @@ ok "статика в $SITE_DIR"
 
 ENV_FILE="$APP_DIR/checkout/.env"
 if [ -f "$ENV_FILE" ]; then
-  ok ".env уже есть — не трогаю"
+  ok ".env уже есть — секреты не трогаю"
+
+  # PUBLIC_URL выводится из домена, а не вводится руками: при смене домена
+  # он должен поехать следом, иначе адрес возврата после оплаты и правило
+  # CORS останутся указывать на старый сайт.
+  CURRENT_PUBLIC="$(grep -E "^PUBLIC_URL=" "$ENV_FILE" | head -1 | cut -d= -f2- || true)"
+  if [ "$CURRENT_PUBLIC" != "https://$DOMAIN" ]; then
+    tmp="$(mktemp)"
+    NEWURL="https://$DOMAIN" awk '
+      BEGIN { v = ENVIRON["NEWURL"]; done = 0 }
+      index($0, "PUBLIC_URL=") == 1 { print "PUBLIC_URL=" v; done = 1; next }
+      { print }
+      END { if (!done) print "PUBLIC_URL=" v }
+    ' "$ENV_FILE" > "$tmp"
+    mv "$tmp" "$ENV_FILE"
+    warn "домен сменился: PUBLIC_URL обновлён на https://$DOMAIN"
+    warn "не забудьте поменять адрес вебхука в кабинете ЮKassa:"
+    warn "  https://$DOMAIN/api/yookassa/webhook"
+    RESTART_NEEDED=1
+  fi
 else
   say "Создаю .env из шаблона"
   cp "$APP_DIR/checkout/.env.example" "$ENV_FILE"
@@ -296,7 +315,11 @@ if [ -n "$MISSING" ]; then
 
 NEXT
 else
+  if [ "${RESTART_NEEDED:-0}" = "1" ]; then
+    ok "перезапускаю службу под новый домен"
+  fi
   systemctl enable --now hollvpn-checkout >/dev/null 2>&1
+  systemctl restart hollvpn-checkout >/dev/null 2>&1 || true
   sleep 2
   if systemctl is-active --quiet hollvpn-checkout; then
     ok "служба запущена"

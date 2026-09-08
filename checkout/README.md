@@ -139,7 +139,7 @@ node src\index.js
 ## Настройка на стороне ЮKassa
 
 1. В личном кабинете → «Интеграция» → «HTTP-уведомления» указать
-   `https://hollvpn.online/api/yookassa/webhook`.
+   `https://hollvpn.ru/api/yookassa/webhook`.
 2. Включить события `payment.succeeded` и `payment.canceled`.
 3. Секретный ключ выпустить там же и положить в `.env`. При компрометации —
    отозвать и выпустить новый; в репозитории его быть не должно никогда.
@@ -167,7 +167,7 @@ node src\index.js
 ключ и спросит `Uri`. Пишите `curl.exe`:
 
 ```powershell
-curl.exe -i https://hollvpn.online/api/payment/test
+curl.exe -i https://hollvpn.ru/api/payment/test
 ```
 
 ## Nginx
@@ -176,7 +176,7 @@ curl.exe -i https://hollvpn.online/api/payment/test
 
 ```nginx
 server {
-    server_name hollvpn.online;
+    server_name hollvpn.ru;
     root /var/www/hollvpn/site;
 
     location / {

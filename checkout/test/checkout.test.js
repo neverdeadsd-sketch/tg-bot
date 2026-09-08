@@ -20,7 +20,7 @@ const REAL_FETCH = globalThis.fetch;
 const CFG = {
   shopId: '139865',
   secretKey: 'test-secret',
-  publicUrl: 'https://hollvpn.online',
+  publicUrl: 'https://hollvpn.ru',
   fulfilmentUrl: 'https://bot.example/fulfil',
   fulfilmentToken: '',
   port: 0,
@@ -236,7 +236,7 @@ test('конфигурация не поднимается без адреса �
   const saved = { ...process.env };
   process.env.YOOKASSA_SHOP_ID = '139865';
   process.env.YOOKASSA_SECRET_KEY = 'x';
-  process.env.PUBLIC_URL = 'https://hollvpn.online';
+  process.env.PUBLIC_URL = 'https://hollvpn.ru';
   delete process.env.FULFILMENT_URL;
 
   assert.throws(() => load(), /FULFILMENT_URL/,
