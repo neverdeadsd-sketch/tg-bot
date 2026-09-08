@@ -53,14 +53,21 @@ elif command -v netstat >/dev/null 2>&1; then
   netstat -lnt 2>/dev/null | awk '{print $4}' | grep -qE "[:.]$PORT\$" && PORT_BUSY=1
 fi
 if [ "$PORT_BUSY" -eq 1 ]; then
-  die "Порт $PORT уже занят — вероятно, ботом или панелью.
-  Запустите с другим портом:  sudo PORT=8090 bash deploy/install.sh"
+  # При повторной установке порт держит наша же служба — это не конфликт.
+  if systemctl is-active --quiet hollvpn-checkout 2>/dev/null; then
+    ok "порт $PORT занят нашей службой — это переустановка, продолжаю"
+  else
+    die "Порт $PORT занят кем-то ещё — вероятно, ботом или панелью.
+  Посмотреть кем:  ss -lntp | grep :$PORT
+  Или взять другой: sudo PORT=8090 bash deploy/install.sh"
+  fi
+else
+  ok "порт $PORT свободен"
 fi
-ok "порт $PORT свободен"
 
 say "Проверяю, что домен $DOMAIN указывает на этот сервер"
 SERVER_IP="$(curl -fsS --max-time 10 https://api.ipify.org 2>/dev/null || echo '')"
-DOMAIN_IP="$(getent ahostsv4 "$DOMAIN" 2>/dev/null | awk 'NR==1{print $1}' || echo '')"
+DOMAIN_IP="$(getent ahostsv4 "$DOMAIN" 2>/dev/null | awk 'NR==1{print $1}' || true)"
 if [ -z "$DOMAIN_IP" ]; then
   warn "домен $DOMAIN не резолвится — сертификат получить не выйдет"
   warn "заведите A-запись на IP этого сервера и запустите скрипт снова"

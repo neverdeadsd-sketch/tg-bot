@@ -24,7 +24,13 @@ SERVER_IP="$(curl -fsS4 --max-time 10 https://api.ipify.org 2>/dev/null || echo 
 [ -n "$SERVER_IP" ] || warn "не удалось определить внешний IP сервера"
 [ -n "$SERVER_IP" ] && ok "IP этого сервера: $SERVER_IP"
 
-resolve() { getent ahostsv4 "$1" 2>/dev/null | awk 'NR==1{print $1}'; }
+# getent возвращает 2, когда имя не резолвится, и под `set -e` это убивало
+# скрипт молча — ровно в том случае, ради которого он и написан.
+resolve() {
+  local out
+  out="$(getent ahostsv4 "$1" 2>/dev/null || true)"
+  printf '%s' "$out" | awk 'NR==1{print $1}'
+}
 
 APEX="$(resolve "$DOMAIN")"
 WWW="$(resolve "www.$DOMAIN")"
