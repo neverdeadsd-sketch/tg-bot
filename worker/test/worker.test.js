@@ -100,10 +100,11 @@ function makeCtx() {
   return { ctx: { waitUntil: (p) => pending.push(p) }, settle: () => Promise.all(pending) };
 }
 
-function req(path, { method = 'GET', body, ip = STRANGER_IP, origin } = {}) {
+function req(path, { method = 'GET', body, ip = STRANGER_IP, origin, accept } = {}) {
   const headers = { 'CF-Connecting-IP': ip };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (origin) headers['Origin'] = origin;
+  if (accept) headers['Accept'] = accept;
   return new Request('https://hollvpn.ru' + path, {
     method, headers, body: body === undefined ? undefined : JSON.stringify(body)
   });
@@ -404,6 +405,54 @@ test('статус несуществующего заказа — 404, а не 
   try {
     const { res } = await call(BASE_ENV, db, req('/api/payment/нет-такого'));
     assert.equal(res.status, 404);
+  } finally { net.restore(); }
+});
+
+test('состояние отдаётся браузеру страницей, а программам — json', async () => {
+  const net = stubFetch();
+  const db = fakeD1();
+  try {
+    // Браузер просит html — и получает страницу, а не файл на скачивание:
+    // json с nosniff телефонный браузер охотно скачивает вместо показа.
+    const { ctx } = makeCtx();
+    const page = await worker.fetch(
+      req('/api/health', { accept: 'text/html,application/xhtml+xml' }),
+      { ...BASE_ENV, DB: db }, ctx);
+    assert.equal(page.status, 200);
+    assert.match(page.headers.get('Content-Type'), /text\/html/);
+    const html = await page.text();
+    assert.match(html, /Оплата работает/);
+    // На странице не должно быть ничего чувствительного.
+    assert.ok(!html.includes(BASE_ENV.YOOKASSA_SECRET_KEY));
+    assert.ok(!html.includes(BASE_ENV.FULFILMENT_URL));
+
+    const api = await call(BASE_ENV, db, req('/api/health'));
+    assert.match(api.res.headers.get('Content-Type'), /application\/json/);
+    assert.equal(api.json.status, 'ok');
+    assert.equal(api.json.stranded_orders, 0);
+  } finally { net.restore(); }
+});
+
+test('без таблиц в базе состояние называет причину, а не «internal error»', async () => {
+  const net = stubFetch();
+  // Соединение с базой есть, а схемы в ней нет — самая частая беда установки.
+  const bare = new DatabaseSync(':memory:');
+  const empty = {
+    prepare(sql) {
+      return {
+        _args: [],
+        bind(...a) { this._args = a; return this; },
+        async first() { const r = bare.prepare(sql).get(...this._args); return r ?? null; },
+        async run() { bare.prepare(sql).run(...this._args); return { success: true }; },
+        async all() { return { results: bare.prepare(sql).all(...this._args) }; }
+      };
+    }
+  };
+  try {
+    const { res, json } = await call(BASE_ENV, empty, req('/api/health'));
+    assert.equal(res.status, 503);
+    assert.equal(json.status, 'no_schema');
+    assert.match(json.error, /schema\.sql/);
   } finally { net.restore(); }
 });
 
