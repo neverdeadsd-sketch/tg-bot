@@ -1002,3 +1002,78 @@ html:not(.js) .reveal { opacity: 1; transform: none; }
   .site-header, .globe-stage, .palette-backdrop, .cta-band, .btn { display: none !important; }
   body { background: #fff; color: #000; }
 }
+
+/* ------------------------------------------------------------- checkout */
+
+.checkout-page {
+  min-height: calc(100vh - var(--nav-h) - 120px);
+  display: grid; place-items: center;
+  padding-block: clamp(32px, 6vw, 72px);
+}
+.checkout-page .container { display: grid; place-items: center; }
+
+.checkout-card {
+  width: min(520px, 100%);
+  padding: clamp(24px, 4vw, 38px);
+  border: 1px solid var(--line); border-radius: var(--r-xl);
+  background: linear-gradient(180deg, var(--surface), var(--bg-3));
+  box-shadow: var(--shadow-lg);
+}
+.checkout-card h1 { font-size: clamp(1.5rem, 1.2rem + 1.4vw, 1.95rem); margin-bottom: 24px; }
+
+.co-order {
+  padding: 18px 20px; margin-bottom: 26px;
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.co-order-row { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; }
+.co-term { font-weight: 620; font-size: 1.02rem; }
+.co-price { font-size: 1.55rem; font-weight: 700; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.co-per { margin: 6px 0 0; font-size: .84rem; color: var(--muted); }
+
+.co-label { display: block; font-size: .88rem; font-weight: 560; margin-bottom: 8px; }
+
+/* Собачка внутри поля, а не в подсказке: так видно, что вводить без неё. */
+.co-input-wrap { position: relative; }
+.co-at {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--faint); font-family: var(--mono); pointer-events: none;
+}
+.co-input { padding-left: 32px; font-family: var(--mono); }
+
+.co-hint { margin: 9px 0 20px; font-size: .82rem; color: var(--faint); line-height: 1.55; }
+
+.co-error {
+  margin: 0 0 16px; padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--line));
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+  color: var(--danger); font-size: .86rem;
+}
+
+.co-legal { margin: 16px 0 0; font-size: .78rem; color: var(--faint); line-height: 1.6; text-align: center; }
+.co-legal a { color: var(--muted); border-bottom: 1px dotted var(--line); }
+.co-legal a:hover { color: var(--accent); }
+
+/* результат */
+.co-status { text-align: center; }
+.co-status h1 { margin-bottom: 12px; }
+.co-status p { color: var(--muted); font-size: .95rem; line-height: 1.65; margin-bottom: 24px; }
+.co-status code {
+  padding: 2px 7px; border-radius: 5px; background: var(--surface-2);
+  border: 1px solid var(--line-soft); font-size: .82em; color: var(--fg-2);
+  word-break: break-all;
+}
+.co-status .btn { display: inline-flex; }
+
+.co-status-icon {
+  width: 58px; height: 58px; margin: 0 auto 20px;
+  display: grid; place-items: center; border-radius: 50%;
+}
+.co-status-icon svg { width: 28px; height: 28px; }
+.co-status.is-ok   .co-status-icon { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+.co-status.is-warn .co-status-icon { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
+.co-status.is-wait .co-status-icon { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+.co-status.is-wait .co-status-icon svg { animation: co-spin 1s linear infinite; }
+@keyframes co-spin { to { transform: rotate(360deg); } }
