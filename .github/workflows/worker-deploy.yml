@@ -63,3 +63,40 @@ jobs:
         run: |
           npm ci --omit=dev --ignore-scripts >/dev/null 2>&1 || npm install --no-save wrangler@4.130.0
           npx wrangler@4.130.0 deploy
+
+      # Секреты ставим после разворачивания и отсюда, а не руками в панели.
+      # В панели у Worker'а два разных списка переменных — для сборки
+      # и для самого Worker'а, — и значения, заведённые не в тот, просто
+      # не доходят до кода. Здесь ошибиться негде.
+      - name: Задать секреты Worker'у
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          YOOKASSA_SECRET_KEY: ${{ secrets.YOOKASSA_SECRET_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+          FULFILMENT_URL: ${{ secrets.FULFILMENT_URL }}
+        working-directory: worker
+        run: |
+          put() {   # имя-переменной
+            eval "value=\${$1-}"
+            if [ -z "$value" ]; then
+              echo "  $1 — не задан в секретах репозитория, пропускаю"
+              return
+            fi
+            # Значение уходит в stdin: в командной строке его увидел бы
+            # список процессов раннера.
+            printf '%s' "$value" | npx wrangler@4.130.0 secret put "$1" >/dev/null
+            echo "  $1 — задан"
+          }
+
+          echo 'Переношу секреты из репозитория в Worker:'
+          put YOOKASSA_SECRET_KEY
+          put TELEGRAM_BOT_TOKEN
+          put TELEGRAM_ADMIN_CHAT_ID
+          put FULFILMENT_URL
+
+          if [ -z "${YOOKASSA_SECRET_KEY:-}" ]; then
+            echo '::error::Не задан секрет репозитория YOOKASSA_SECRET_KEY — без него оплата не заработает.'
+            exit 1
+          fi
