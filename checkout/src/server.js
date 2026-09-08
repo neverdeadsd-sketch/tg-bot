@@ -130,7 +130,13 @@ function create(cfg, store) {
       return send(res, 502, { error: 'Платёжный сервис недоступен. Попробуйте позже или оплатите в боте.' });
     }
 
-    store.attachPayment(order.id, payment.id);
+    const attached = store.attachPayment(order.id, payment.id);
+    if (attached !== true) {
+      // Платёж создан, ссылку отдаём — иначе клиент потеряет оплату из-за
+      // сбоя записи. Вебхук найдёт заказ по metadata.order_id.
+      log(`ВНИМАНИЕ: заказ ${order.id}: платёж ${payment.id} создан, ` +
+          `но не записан в базу — ${attached.message}`);
+    }
     const url = payment.confirmation && payment.confirmation.confirmation_url;
     if (!url) {
       log(`заказ ${order.id}: ЮKassa не вернула ссылку подтверждения`);
@@ -212,6 +218,8 @@ function create(cfg, store) {
       amount: rubles(order.kopecks),
       telegram: order.telegram,
       delivered: Boolean(order.fulfilled_at),
+      // auto — бот уже выдал; manual — заявка ушла, выдаёт человек.
+      delivery_mode: cfg.deliveryMode,
       // Оплачено, но не выдано — фронтенд должен показать это честно.
       needs_attention: order.status === 'succeeded' && !order.fulfilled_at
     });

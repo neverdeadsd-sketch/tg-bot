@@ -60,7 +60,14 @@ function open(path) {
       stmt.insert.run(order.id, order.days, order.kopecks, order.telegram, order.email || null);
       return stmt.byId.get(order.id);
     },
-    attachPayment(id, paymentId) { stmt.setPayment.run(paymentId, id); },
+    /* Платёж в ЮKassa к этому моменту уже создан, поэтому ошибка записи
+     * не должна ронять запрос: вебхук найдёт заказ по metadata.order_id
+     * даже без этой связи. Возвращаем результат, чтобы вызывающий
+     * мог написать в лог. */
+    attachPayment(id, paymentId) {
+      try { stmt.setPayment.run(paymentId, id); return true; }
+      catch (e) { return e; }
+    },
     byId(id) { return stmt.byId.get(id); },
     byPayment(paymentId) { return stmt.byPayment.get(paymentId); },
     setStatus(id, status) { stmt.setStatus.run(status, id); },

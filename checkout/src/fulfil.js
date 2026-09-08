@@ -7,9 +7,13 @@
  */
 'use strict';
 
+const notify = require('./notify');
+
 const DEFAULT_RETRIES = [0, 2000, 8000, 30000];   // четыре попытки, растущие паузы
 
-async function post(cfg, payload) {
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function postFulfilment(cfg, payload) {
   const headers = { 'Content-Type': 'application/json' };
   if (cfg.fulfilmentToken) headers['Authorization'] = 'Bearer ' + cfg.fulfilmentToken;
 
@@ -22,14 +26,24 @@ async function post(cfg, payload) {
   if (!res.ok) {
     throw new Error(`выдача вернула ${res.status}: ${(await res.text()).slice(0, 200)}`);
   }
-  return res;
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function withRetries(cfg, attempt, onFail) {
+  const retries = cfg.fulfilRetries || DEFAULT_RETRIES;
+  let lastError = null;
+  for (let i = 0; i < retries.length; i++) {
+    if (retries[i]) await sleep(retries[i]);
+    try { await attempt(); return null; }
+    catch (e) { lastError = e; onFail(i + 1, e); }
+  }
+  return lastError;
+}
 
-/* Возвращает true, если подписка выдана. При неудаче заказ остаётся
- * со статусом succeeded и непустым fulfil_error — его видно в /health
- * и в GET /api/stranded, чтобы выдать вручную. */
+/* Возвращает true, если обязательство сервиса выполнено.
+ *
+ * В режиме auto это значит «бот принял заказ и выдал подписку». В режиме
+ * manual — «вам ушло сообщение с данными заказа»: дальше выдаёте руками,
+ * поэтому покупателю мы и говорим не «подписка активна», а «выдаём». */
 async function deliver(cfg, store, order, log) {
   const payload = {
     order_id: order.id,
@@ -41,23 +55,47 @@ async function deliver(cfg, store, order, log) {
     paid_at: new Date().toISOString()
   };
 
-  const retries = cfg.fulfilRetries || DEFAULT_RETRIES;
-  let lastError = null;
-  for (let i = 0; i < retries.length; i++) {
-    if (retries[i]) await sleep(retries[i]);
-    try {
-      await post(cfg, payload);
+  if (cfg.deliveryMode === 'auto') {
+    const err = await withRetries(cfg,
+      () => postFulfilment(cfg, payload),
+      (n, e) => log(`заказ ${order.id}: попытка выдачи ${n} не удалась — ${e.message}`));
+
+    if (!err) {
       store.markFulfilled(order.id);
       log(`заказ ${order.id}: подписка выдана (${order.days} дн. → ${order.telegram})`);
       return true;
-    } catch (e) {
-      lastError = e;
-      log(`заказ ${order.id}: попытка выдачи ${i + 1} не удалась — ${e.message}`);
     }
+
+    store.setFulfilError(order.id, err.message);
+    log(`ВНИМАНИЕ: заказ ${order.id} оплачен, но подписка не выдана. Требуется ручная выдача.`);
+
+    /* Автовыдача сорвалась — это тот случай, ради которого уведомления
+     * и нужны: деньги уже получены, и узнать об этом надо сразу. */
+    if (cfg.hasTelegram) {
+      try {
+        await notify.send(cfg, notify.failedText(order, err.message));
+        log(`заказ ${order.id}: тревога отправлена в Telegram`);
+      } catch (e) {
+        log(`заказ ${order.id}: не удалось отправить тревогу — ${e.message}`);
+      }
+    }
+    return false;
   }
 
-  store.setFulfilError(order.id, lastError ? lastError.message : 'неизвестная ошибка');
-  log(`ВНИМАНИЕ: заказ ${order.id} оплачен, но подписка не выдана. Требуется ручная выдача.`);
+  // Ручной режим: сообщение вам и есть доставка.
+  const err = await withRetries(cfg,
+    () => notify.send(cfg, notify.paidText(order)),
+    (n, e) => log(`заказ ${order.id}: попытка уведомления ${n} не удалась — ${e.message}`));
+
+  if (!err) {
+    store.markFulfilled(order.id);
+    log(`заказ ${order.id}: уведомление отправлено (${order.days} дн. → ${order.telegram})`);
+    return true;
+  }
+
+  store.setFulfilError(order.id, err.message);
+  log(`ВНИМАНИЕ: заказ ${order.id} оплачен, уведомление не доставлено. ` +
+      `Данные заказа только в базе — смотрите GET /health.`);
   return false;
 }
 

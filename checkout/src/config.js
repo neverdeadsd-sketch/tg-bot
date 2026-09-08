@@ -40,13 +40,21 @@ function load() {
     // разрешённый источник запросов CORS.
     publicUrl: required('PUBLIC_URL').replace(/\/+$/, ''),
 
-    /* Куда сообщить об успешной оплате, чтобы выдать подписку.
+    /* Куда сообщить об оплате, чтобы выдать доступ.
      *
-     * Обязательна. Без неё сервис отказывается стартовать: чекаут, который
-     * умеет принять деньги, но не умеет выдать доступ, — это способ собрать
-     * оплаты и не оказать услугу. Лучше не подняться, чем подняться таким. */
-    fulfilmentUrl:   required('FULFILMENT_URL'),
+     * Способа два, и хотя бы один обязателен:
+     *
+     *   FULFILMENT_URL — эндпоинт бота, выдаёт подписку сам. Основной путь.
+     *   TELEGRAM_*     — сообщение вам в Telegram, выдаёте руками.
+     *
+     * Без обоих сервис не стартует: чекаут, который умеет принять деньги
+     * и никак не сообщить об этом, — это способ собрать оплаты и не оказать
+     * услугу. Лучше не подняться, чем подняться таким. */
+    fulfilmentUrl:   optional('FULFILMENT_URL', ''),
     fulfilmentToken: optional('FULFILMENT_TOKEN', ''),
+
+    telegramToken:  optional('TELEGRAM_BOT_TOKEN', ''),
+    telegramChatId: optional('TELEGRAM_ADMIN_CHAT_ID', ''),
 
     port:   Number(optional('PORT', '8080')),
     dbPath: optional('DB_PATH', './orders.db'),
@@ -78,9 +86,27 @@ function load() {
   if (!/^https?:\/\//.test(cfg.publicUrl)) {
     throw new Error('PUBLIC_URL должен начинаться с http:// или https://');
   }
-  if (!/^https?:\/\//.test(cfg.fulfilmentUrl)) {
+  if ((cfg.telegramToken && !cfg.telegramChatId) || (!cfg.telegramToken && cfg.telegramChatId)) {
+    throw new Error('TELEGRAM_BOT_TOKEN и TELEGRAM_ADMIN_CHAT_ID задаются только вместе');
+  }
+
+  var hasTelegram = Boolean(cfg.telegramToken && cfg.telegramChatId);
+  if (!cfg.fulfilmentUrl && !hasTelegram) {
+    throw new Error(
+      'Не настроен ни один способ сообщить об оплате.\n' +
+      '  Задайте FULFILMENT_URL (бот выдаёт подписку сам)\n' +
+      '  или TELEGRAM_BOT_TOKEN вместе с TELEGRAM_ADMIN_CHAT_ID (выдаёте вручную).\n' +
+      '  Сервис не запускается без этого намеренно: иначе он принимал бы\n' +
+      '  деньги, не сообщая об этом никому.'
+    );
+  }
+  if (cfg.fulfilmentUrl && !/^https?:\/\//.test(cfg.fulfilmentUrl)) {
     throw new Error('FULFILMENT_URL должен начинаться с http:// или https://');
   }
+
+  // Выдаёт бот или человек — от этого зависит, что мы говорим покупателю.
+  cfg.deliveryMode = cfg.fulfilmentUrl ? 'auto' : 'manual';
+  cfg.hasTelegram = hasTelegram;
   if (!Number.isInteger(cfg.port) || cfg.port < 1 || cfg.port > 65535) {
     throw new Error('PORT должен быть числом от 1 до 65535');
   }

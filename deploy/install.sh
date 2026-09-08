@@ -256,14 +256,21 @@ if ! grep -qE '^YOOKASSA_SECRET_KEY=.+' "$ENV_FILE"; then
   MISSING="$MISSING YOOKASSA_SECRET_KEY"
 fi
 
-# Адрес выдачи должен быть задан и отличаться от примера в шаблоне.
+# Выдача: годится либо эндпоинт бота, либо уведомления в Telegram.
 FULFIL_LINE="$(grep -E '^FULFILMENT_URL=' "$ENV_FILE" | head -1 | cut -d= -f2-)"
+TG_TOKEN="$(grep -E '^TELEGRAM_BOT_TOKEN=' "$ENV_FILE" | head -1 | cut -d= -f2-)"
+TG_CHAT="$(grep -E '^TELEGRAM_ADMIN_CHAT_ID=' "$ENV_FILE" | head -1 | cut -d= -f2-)"
+
+HAS_FULFIL=0
 case "$FULFIL_LINE" in
-  https://bot.hollvpn.online/internal/fulfil|"")
-    MISSING="$MISSING FULFILMENT_URL" ;;
-  http://*|https://*) ;;
-  *) MISSING="$MISSING FULFILMENT_URL" ;;
+  http://*|https://*) HAS_FULFIL=1 ;;
 esac
+HAS_TELEGRAM=0
+if [ -n "$TG_TOKEN" ] && [ -n "$TG_CHAT" ]; then HAS_TELEGRAM=1; fi
+
+if [ "$HAS_FULFIL" -eq 0 ] && [ "$HAS_TELEGRAM" -eq 0 ]; then
+  MISSING="$MISSING способ-выдачи"
+fi
 
 if [ -n "$MISSING" ]; then
   systemctl enable hollvpn-checkout >/dev/null 2>&1 || true
@@ -274,13 +281,18 @@ if [ -n "$MISSING" ]; then
   1. Откройте файл:      nano $ENV_FILE
   2. Впишите значения:
        YOOKASSA_SECRET_KEY — кабинет ЮKassa → Интеграция → Ключи API
-       FULFILMENT_URL      — адрес в вашем боте, который выдаёт подписку
+
+     И хотя бы одно из двух — как сообщать об оплате:
+       FULFILMENT_URL         — бот выдаёт подписку сам
+       TELEGRAM_BOT_TOKEN
+       TELEGRAM_ADMIN_CHAT_ID — уведомление вам, выдаёте вручную
+                                (токен у @BotFather, id у @userinfobot)
   3. Запустите службу:   systemctl start hollvpn-checkout
   4. Проверьте:          systemctl status hollvpn-checkout
                          curl localhost:$PORT/health
 
-  Служба намеренно не стартует без FULFILMENT_URL: чекаут, который умеет
-  взять деньги и не умеет выдать подписку, собирал бы оплаты впустую.
+  Служба намеренно не стартует, пока не настроен ни один способ сообщить
+  об оплате: иначе она принимала бы деньги, не говоря об этом никому.
 
 NEXT
 else
