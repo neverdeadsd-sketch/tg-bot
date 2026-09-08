@@ -10,7 +10,10 @@
     bot:      'hollvpn_bot',            // https://t.me/<bot>
     support:  'hollvpn_support',
     channel:  'hollvpn_status',
-    checkout: '/checkout',              // страница оплаты на сайте
+    /* Страница оплаты на сайте. Пока её нет — оставьте пустую строку,
+     * и ссылка «оплатить на сайте» просто не будет показана. Появится
+     * чекаут — впишите путь, ссылка вернётся сама. */
+    checkout: '',
     currency: '₽',
 
     /* Одна подписка, отличается только оплаченный срок.
@@ -383,7 +386,16 @@
         'Оформить на ' + days(chosen.days) + ' — ' + fmt(chosen.price) + ' ' + CONFIG.currency;
     }
     var alt = $('#subCheckout');
-    if (alt) alt.href = CONFIG.checkout + '?days=' + chosen.days;
+    if (alt) {
+      var wrap = alt.parentNode;
+      if (CONFIG.checkout) {
+        alt.href = CONFIG.checkout + '?days=' + chosen.days;
+        wrap.hidden = false;
+      } else {
+        // Ссылки на несуществующий чекаут быть не должно — это 404.
+        wrap.hidden = true;
+      }
+    }
 
     var feats = $('#subFeatures');
     if (feats && !feats.childElementCount) {

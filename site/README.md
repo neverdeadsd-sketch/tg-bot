@@ -78,7 +78,7 @@ var CONFIG = {
   bot:      'hollvpn_bot',      // https://t.me/<bot>
   support:  'hollvpn_support',
   channel:  'hollvpn_status',
-  checkout: '/checkout',        // куда ведёт «оплатить на сайте»
+  checkout: '',                 // путь к чекауту; пусто = ссылка скрыта
   currency: '₽',
   plans: [ /* название, цена за месяц и за год, устройства, список фич */ ]
 };
