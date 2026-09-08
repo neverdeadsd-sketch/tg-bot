@@ -1,0 +1,10 @@
+{
+  "name": "hollvpn-checkout-worker",
+  "version": "1.0.0",
+  "description": "Оплата подписки HollVPN на Cloudflare Workers. Логика общая с checkout/.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/worker.test.js"
+  }
+}

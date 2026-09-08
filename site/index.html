@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HollVPN — свободный интернет за 30 секунд</title>
+<meta name="description" content="VPN на протоколе VLESS + Reality, который не видят системы блокировок. Две локации — Нидерланды и Финляндия, до 300 Мбит/с без лимита трафика, оплата в Telegram.">
+<meta name="theme-color" content="#060B14" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F4F8FC" media="(prefers-color-scheme: light)">
+<link rel="canonical" href="https://hollvpn.ru/">
+
+<meta property="og:url" content="https://hollvpn.ru/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="HollVPN">
+<meta property="og:title" content="HollVPN — свободный интернет за 30 секунд">
+<meta property="og:description" content="VLESS + Reality, Нидерланды и Финляндия, до 300 Мбит/с, оплата в Telegram.">
+<meta property="og:locale" content="ru_RU">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/main.css">
+
+<script>
+  /* Theme is resolved before first paint so a light-theme visitor never sees
+     a dark flash. Inline by necessity — an external file would land too late. */
+  (function () {
+    document.documentElement.classList.add('js');
+    try {
+      var saved = localStorage.getItem('hollvpn-theme');
+      if (saved) document.documentElement.setAttribute('data-theme', saved);
+    } catch (e) { /* private mode: keep the markup default */ }
+  })();
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "HollVPN",
+  "applicationCategory": "SecurityApplication",
+  "operatingSystem": "iOS, Android, Windows, macOS, Linux, Android TV",
+  "offers": { "@type": "Offer", "price": "199", "priceCurrency": "RUB" }
+}
+</script>
+</head>
+
+<body>
+<a class="skip-link" href="#main">Перейти к содержимому</a>
+
+<!-- Icon sprite: one HTTP request less than separate files, and the icons
+     inherit currentColor so they follow the theme. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3l7 3v6c0 4.4-3 8.2-7 9-4-.8-7-4.6-7-9V6l7-3z"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6L9 17l-5-5"/></symbol>
+    <symbol id="i-bolt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M13 2L4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.6 5.2A9.9 9.9 0 0112 5c6 0 10 7 10 7a17 17 0 01-3.1 3.9M6.2 6.2A17 17 0 002 12s4 7 10 7a9.7 9.7 0 005.4-1.6"/>
+      <path d="M9.9 9.9a3 3 0 004.2 4.2M2 2l20 20"/></symbol>
+    <symbol id="i-devices" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="4" width="14" height="10" rx="2"/><path d="M5 20h7"/><path d="M8.5 14v6"/>
+      <rect x="17" y="9" width="5" height="11" rx="1.5"/></symbol>
+    <symbol id="i-split" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12h5l4-6h9M12 18h9M17 3l4 3-4 3M17 15l4 3-4 3"/></symbol>
+    <symbol id="i-card" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M2 10h20M6 15h4"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 11.5a8.4 8.4 0 01-9 8.4 9.3 9.3 0 01-3.8-.8L3 21l1.9-4.9A8.3 8.3 0 013 11.5a8.5 8.5 0 019-8.4 8.4 8.4 0 019 8.4z"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4" y="10" width="16" height="11" rx="2.5"/><path d="M8 10V7a4 4 0 018 0v3"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 010 18 15 15 0 010-18z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 5.5A2.5 2.5 0 016.5 3H20v15H6.5A2.5 2.5 0 004 20.5z"/><path d="M4 20.5A2.5 2.5 0 016.5 18H20v3H6.5A2.5 2.5 0 014 20.5z"/></symbol>
+    <symbol id="i-tg" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M21.9 4.3l-3.1 14.6c-.2 1-.9 1.3-1.7.8l-4.7-3.5-2.3 2.2c-.3.3-.5.5-1 .5l.3-4.9 8.9-8c.4-.3-.1-.5-.6-.2L6.7 12.6 2 11.1c-1-.3-1-1 .2-1.5l18.4-7.1c.9-.3 1.6.2 1.3 1.8z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="9" width="12" height="12" rx="2.5"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M19.1 4.9l-1.8 1.8M6.7 17.3l-1.8 1.8"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 14.2A8.5 8.5 0 019.8 4 8.5 8.5 0 1020 14.2z"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-close-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a9 9 0 11-2.6-6.4M21 4v5h-5"/></symbol>
+  </defs>
+</svg>
+
+<header class="site-header" id="header">
+  <div class="container">
+    <a class="brand" href="index.html" aria-label="HollVPN — на главную">
+      <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="hollMark" x1="16" y1="2" x2="16" y2="30" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#5BA9F7"/><stop offset="1" stop-color="#1B5FD0"/>
+          </linearGradient>
+        </defs>
+        <path d="M16 2.6 27 6.9v9.3c0 6.5-4.5 11.8-11 13.2C9.5 28 5 22.7 5 16.2V6.9z"
+              fill="url(#hollMark)" fill-opacity=".16" stroke="url(#hollMark)"
+              stroke-width="2.1" stroke-linejoin="round"/>
+        <path d="M11.7 9.1h3.2v5h2.2v-5h3.2v13.8h-3.2v-5.5h-2.2v5.5h-3.2z" fill="#F2F6FB"/>
+      </svg>
+      <span>Holl<b>VPN</b></span>
+    </a>
+
+    <nav class="nav" id="nav" aria-label="Основная навигация">
+      <a href="#features">Возможности</a>
+      <a href="#servers">Серверы</a>
+      <a href="#compare">Сравнение</a>
+      <a href="#pricing">Тарифы</a>
+      <a href="guide.html">Справочник</a>
+      <a href="#faq">Вопросы</a>
+    </nav>
+
+    <div class="header-actions">
+      <button class="search-trigger" data-palette-open type="button">
+        <svg aria-hidden="true"><use href="#i-search"/></svg>
+        <span>Поиск по сайту…</span>
+        <span class="k"><kbd>⌘</kbd><kbd>K</kbd></span>
+      </button>
+      <button class="icon-btn" id="themeToggle" type="button" aria-label="Переключить тему">
+        <svg aria-hidden="true" data-theme-icon><use href="#i-moon"/></svg>
+      </button>
+      <a class="btn btn--primary btn--sm" data-tg href="#" data-utm="header">
+        <svg aria-hidden="true"><use href="#i-tg"/></svg>
+        <span class="btn-label">Попробовать</span>
+      </a>
+      <button class="icon-btn burger" id="burger" type="button" aria-label="Меню" aria-expanded="false" aria-controls="nav">
+        <svg aria-hidden="true"><use href="#i-menu"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+
+<!-- ============================================================ hero -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <span class="badge badge--accent"><i class="dot-live"></i> Нидерланды и Финляндия · обе в одной подписке</span>
+
+        <h1>
+          <span class="line">Свободный интернет</span>
+          <span class="line grad-text">за 30 секунд</span>
+        </h1>
+
+        <p class="lede">
+          HollVPN работает на <b>VLESS&nbsp;+&nbsp;Reality</b> — трафик неотличим от обычного
+          визита на сайт, поэтому его не различают системы фильтрации.
+          До 300 Мбит/с, трафик без лимита, оплата прямо в Telegram,
+          никаких логов.
+        </p>
+
+        <div class="hero-cta">
+          <a class="btn btn--primary btn--lg" data-tg href="#" data-utm="hero">
+            <svg aria-hidden="true"><use href="#i-tg"/></svg>
+            Оформить подписку
+          </a>
+          <a class="btn btn--ghost btn--lg" href="#pricing">
+            Тарифы и оплата
+            <svg aria-hidden="true"><use href="#i-arrow"/></svg>
+          </a>
+        </div>
+
+        <div class="hero-proof">
+          <span><svg aria-hidden="true"><use href="#i-check"/></svg> Без своего приложения</span>
+          <span><svg aria-hidden="true"><use href="#i-check"/></svg> Оплата прямо в Telegram</span>
+          <span><svg aria-hidden="true"><use href="#i-check"/></svg> От 123 ₽ в месяц</span>
+        </div>
+      </div>
+
+      <div class="globe-stage" id="globeStage">
+        <canvas id="globe" role="img"
+                aria-label="Трёхмерная модель Земли: серверы HollVPN в Нидерландах и Финляндии, к ним сходятся маршруты"></canvas>
+        <noscript><div class="globe-fallback">Серверы в Нидерландах и Финляндии</div></noscript>
+        <div class="globe-readout" id="globeReadout" hidden>
+          <span class="k">Выбранная локация</span>
+          <span class="v" id="roCity">Амстердам</span>
+          <span class="m" id="roMeta">≈ 42 мс · загрузка 34%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================= trustbar -->
+<section class="trustbar" aria-label="Ключевые показатели">
+  <div class="container">
+    <div class="t-item"><svg aria-hidden="true"><use href="#i-globe"/></svg>
+      <span><strong class="counter" data-count-to="2">2</strong> локации в Северной Европе</span></div>
+    <div class="t-item"><svg aria-hidden="true"><use href="#i-bolt"/></svg>
+      <span>до <strong>300 Мбит/с</strong></span></div>
+    <div class="t-item"><svg aria-hidden="true"><use href="#i-chat"/></svg>
+      <span><strong>Быстрая</strong> поддержка в Telegram</span></div>
+    <div class="t-item"><svg aria-hidden="true"><use href="#i-eye-off"/></svg>
+      <span><strong>0</strong> логов подключений</span></div>
+  </div>
+</section>
+
+<!-- ======================================================== как это -->
+<section class="section" id="how">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Как это работает</span>
+      <h2>Три шага — и всё</h2>
+      <p class="lede">Без установки «фирменного» приложения: HollVPN работает
+        в обычных клиентах, которые уже есть в App&nbsp;Store, Google&nbsp;Play и GitHub.</p>
+    </div>
+
+    <div class="steps">
+      <div class="step reveal">
+        <h3>Открываете бота</h3>
+        <p>Нажимаете «Старт», выбираете срок и оплачиваете — подписка приходит
+           следующим сообщением. Регистрация не нужна: Telegram уже знает, кто вы.</p>
+      </div>
+      <div class="step reveal" data-delay="1">
+        <h3>Ставите клиент</h3>
+        <p>Happ — основной, он есть на iPhone, Android и компьютере.
+           Кнопка «Установить VPN» в боте ведёт сразу на нужную версию.</p>
+      </div>
+      <div class="step reveal" data-delay="2">
+        <h3>Добавляете подписку</h3>
+        <p>Копируете ссылку из бота и вставляете в Happ кнопкой добавления
+           подписки. Клиент подтянет серверы и включит соединение.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================== features -->
+<section class="section" id="features">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Возможности</span>
+      <h2>Сделано под сегодняшние блокировки</h2>
+      <p class="lede">Старые протоколы вроде OpenVPN и IKEv2 определяются по сигнатуре
+        за доли секунды. HollVPN использует то, что определить нельзя в принципе.</p>
+    </div>
+
+    <div class="bento">
+      <div class="tilt span-4 row-2 reveal">
+        <article class="card card--spot" style="height:100%;display:flex;flex-direction:column">
+          <div class="card-icon"><svg aria-hidden="true"><use href="#i-shield"/></svg></div>
+          <h3>VLESS + Reality: трафик, которого не видно</h3>
+          <p>Reality не подделывает TLS-сертификат, а заимствует настоящий —
+             у крупного стороннего сайта. Для наблюдателя вы просто открыли
+             популярный ресурс: сходятся и сертификат, и отпечаток соединения,
+             и тайминги. Отличить нечем, поэтому блокировать нечего.</p>
+          <ul class="proto-list" style="list-style:none;padding:0;margin:22px 0 0;display:grid;gap:9px">
+            <li><b>VLESS&nbsp;+&nbsp;Reality</b> — основной, обходит DPI</li>
+            <li><b>VLESS&nbsp;+&nbsp;XTLS-Vision</b> — минимум накладных расходов</li>
+            <li><b>Shadowsocks-2022</b> — запасной, для роутеров</li>
+            <li><b>AmneziaWG</b> — WireGuard с обфускацией</li>
+          </ul>
+          <p style="margin-top:auto;padding-top:20px;font-size:.86rem;color:var(--faint)">
+            Протокол переключается в боте за два тапа — перевыпускать подписку не нужно.</p>
+        </article>
+      </div>
+
+      <div class="tilt span-2 reveal" data-delay="1">
+        <article class="card card--spot">
+          <div class="card-icon"><svg aria-hidden="true"><use href="#i-bolt"/></svg></div>
+          <h3>Без квот на трафик</h3>
+          <p>До 300 Мбит/с — хватает и на 4K, и на торренты. Сколько скачали,
+             столько скачали: гигабайты не считаем и скорость после «лимита»
+             не режем, потому что лимита нет.</p>
+        </article>
+      </div>
+
+      <div class="tilt span-2 reveal" data-delay="2">
+        <article class="card card--spot">
+          <div class="card-icon"><svg aria-hidden="true"><use href="#i-eye-off"/></svg></div>
+          <h3>Логов нет</h3>
+          <p>Не пишем историю подключений, посещённые адреса и DNS-запросы.
+             Серверы работают в RAM — при перезагрузке диск нечего изымать.</p>
+        </article>
+      </div>
+
+      <div class="tilt span-2 reveal">
+        <article class="card card--spot">
+          <div class="card-icon"><svg aria-hidden="true"><use href="#i-devices"/></svg></div>
+          <h3>Ссылка вместо ключа</h3>
+          <p>Бот выдаёт ссылку-подписку, а не разовый конфиг. Клиент сам
+             подтягивает по ней актуальные серверы — если узел сменил адрес,
+             у вас это появится без перенастройки.</p>
+        </article>
+      </div>
+
+      <div class="tilt span-2 reveal" data-delay="1">
+        <article class="card card--spot">
+          <div class="card-icon"><svg aria-hidden="true"><use href="#i-split"/></svg></div>
+          <h3>Раздельное туннелирование</h3>
+          <p>Госуслуги, банки и российские сервисы идут напрямую и не видят
+             зарубежный IP. Через туннель — только то, что нужно.</p>
+        </article>
+      </div>
+
+      <div class="tilt span-2 reveal" data-delay="2">
+        <article class="card card--spot">
+          <div class="card-icon"><svg aria-hidden="true"><use href="#i-card"/></svg></div>
+          <h3>Оплата в два тапа</h3>
+          <p>Не нужно вводить карту на чужом сайте и заводить аккаунт:
+             покупка проходит там же, где вы читаете этот текст, —
+             в чате с ботом. Доступные способы бот показывает на шаге оплаты.</p>
+        </article>
+      </div>
+
+      <div class="tilt span-3 reveal">
+        <article class="card card--spot">
+          <div class="card-icon"><svg aria-hidden="true"><use href="#i-chat"/></svg></div>
+          <h3>Живая поддержка, а не бот с кнопками</h3>
+          <p>Пишете в тот же чат, где покупали, — отвечает человек и отвечает
+             быстро. Помогаем настроить даже роутер, а не отправляем читать
+             инструкцию.</p>
+        </article>
+      </div>
+
+      <div class="tilt span-3 reveal" data-delay="1">
+        <article class="card card--spot">
+          <div class="card-icon"><svg aria-hidden="true"><use href="#i-lock"/></svg></div>
+          <h3>Защита от утечек</h3>
+          <p>Kill Switch обрывает трафик, если туннель упал. DNS уходит внутрь
+             туннеля, WebRTC не выдаёт домашний IP, IPv6 не течёт мимо.</p>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================= servers -->
+<section class="section" id="servers">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Сеть</span>
+      <h2>Две локации, и обе в одной подписке</h2>
+      <p class="lede">Нидерланды и Финляндия — не «60 стран на витрине», а два узла,
+        которые мы держим сами и до которых из России ближе всего.
+        Задержка ниже считается прямо в браузере по вашему часовому поясу:
+        это оценка, а не замер, но порядок величины честный.</p>
+    </div>
+
+    <div class="server-panel">
+      <div class="server-list reveal">
+        <header>
+          <span>Локация</span>
+          <span>Задержка</span>
+        </header>
+        <div class="server-scroll" id="serverScroll" role="list">
+          <!-- filled by app.js from HollGlobe.LOCATIONS -->
+        </div>
+      </div>
+
+      <div class="server-aside reveal" data-delay="1">
+        <article class="card">
+          <h3 style="font-size:1.05rem">Почему только две</h3>
+          <p style="margin-top:10px">Мы не арендуем витрину из десятков стран, где половина
+             узлов перепродана и перегружена. Две ноды в Северной Европе — те,
+             до которых из России и СНГ короче всего маршрут, и обе мы настраиваем
+             сами. Переключение мгновенное, менять подписку не нужно.</p>
+        </article>
+        <article class="card">
+          <h3 style="font-size:1.05rem">Обе — свои</h3>
+          <p style="margin-top:10px">Мы не перепродаём чужие каналы: арендуем железо
+             напрямую в дата-центрах и сами настраиваем ноды. Поэтому знаем,
+             что на них не пишутся логи.</p>
+        </article>
+      </div>
+
+      <a class="btn btn--primary btn--lg reveal" data-delay="2" data-tg href="#" data-utm="servers"
+         style="justify-self:center">
+        <svg aria-hidden="true"><use href="#i-tg"/></svg>
+        Оформить подписку
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ====================================================== leak check -->
+<section class="section section--tight" id="privacy">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Проверка</span>
+      <h2>Что о вас видно прямо сейчас</h2>
+      <p class="lede">Всё ниже собрано этой страницей за миллисекунды, без единого
+        запроса на сервер. Ровно те же данные получает любой сайт, который вы открываете.</p>
+    </div>
+
+    <div class="leak" id="leakGrid" aria-live="polite">
+      <div class="leak-item"><div class="k">Проверка</div><div class="v">Нажмите «Проверить»</div></div>
+    </div>
+
+    <div class="row gap-12" style="margin-top:22px">
+      <button class="btn btn--primary" id="leakRun" type="button">
+        <svg aria-hidden="true"><use href="#i-search"/></svg>
+        Проверить мой браузер
+      </button>
+      <a class="btn btn--ghost" href="guide.html#privacy-leaks">Как это закрыть</a>
+    </div>
+
+    <p class="leak-note">
+      Мы ничего из этого не сохраняем и никуда не отправляем — код проверки лежит
+      в <code>assets/js/leakcheck.js</code>, его видно в исходниках страницы.
+      VPN скрывает ваш IP и провайдера, но часть этих данных отдаёт сам браузер:
+      как закрыть остальное — в <a href="guide.html#privacy-leaks">справочнике</a>.
+    </p>
+  </div>
+</section>
+
+<!-- ========================================================= compare -->
+<section class="section" id="compare">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Сравнение</span>
+      <h2>Честно про альтернативы</h2>
+      <p class="lede">Сравниваем не с конкретными брендами, а с категориями —
+        так честнее. У каждой есть свои сильные стороны, и мы их не скрываем.</p>
+    </div>
+
+    <div class="compare-wrap reveal">
+      <table class="compare">
+        <caption class="sr-only">Сравнение HollVPN с другими категориями VPN-сервисов</caption>
+        <thead>
+          <tr>
+            <th scope="col">Критерий</th>
+            <th scope="col" class="col-us">HollVPN</th>
+            <th scope="col">Дешёвые TG-боты</th>
+            <th scope="col">Крупные западные VPN</th>
+            <th scope="col">Бесплатные VPN</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Обход DPI (Reality/XTLS)</th>
+            <td class="col-us"><span class="yes">✓</span> основной протокол</td>
+            <td><span class="partial">частично</span></td>
+            <td><span class="no">✕</span> классические протоколы</td>
+            <td><span class="no">✕</span></td></tr>
+          <tr><th scope="row">Скорость</th>
+            <td class="col-us">до 300 Мбит/с</td><td>50–200 Мбит/с</td>
+            <td>высокая</td><td>5–20 Мбит/с</td></tr>
+          <tr><th scope="row">Локаций</th>
+            <td class="col-us">2 — Нидерланды, Финляндия</td><td>3–8</td><td>60+</td><td>3–10</td></tr>
+          <tr><th scope="row">Устройств на подписке</th>
+            <td class="col-us">1 на подписку</td><td>1–3</td><td>5–10</td><td>1</td></tr>
+          <tr><th scope="row">Оплата из России</th>
+            <td class="col-us"><span class="yes">✓</span></td><td><span class="yes">✓</span></td>
+            <td><span class="no">✕</span></td><td>—</td></tr>
+          <tr><th scope="row">Поддержка на русском</th>
+            <td class="col-us"><span class="yes">✓</span> человек</td>
+            <td><span class="partial">когда как</span></td>
+            <td><span class="partial">чат-бот, англ.</span></td>
+            <td><span class="no">✕</span></td></tr>
+          <tr><th scope="row">Политика без логов</th>
+            <td class="col-us"><span class="yes">✓</span> RAM-серверы</td>
+            <td><span class="partial">не заявлена</span></td>
+            <td><span class="yes">✓</span> с аудитом</td>
+            <td><span class="no">✕</span> монетизация данными</td></tr>
+          <tr><th scope="row">Раздельное туннелирование</th>
+            <td class="col-us"><span class="yes">✓</span></td><td><span class="no">✕</span></td>
+            <td><span class="yes">✓</span></td><td><span class="no">✕</span></td></tr>
+          <tr><th scope="row">Работает в обычных клиентах</th>
+            <td class="col-us"><span class="yes">✓</span> без нашего приложения</td>
+            <td><span class="partial">частично</span></td>
+            <td><span class="no">✕</span> только своё</td>
+            <td><span class="no">✕</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="leak-note reveal">Данные по категориям — обобщение публичных условий
+      на сентябрь 2026&nbsp;года. Крупные западные сервисы объективно выигрывают
+      по числу локаций и независимым аудитам — двух узлов в Северной Европе
+      объективно не хватит, если вам нужен IP в Японии или Бразилии.
+      Мы выигрываем там, где важен обход блокировок, короткий маршрут из России,
+      оплата из России без танцев с зарубежными картами и живая поддержка.</p>
+  </div>
+</section>
+
+<!-- ========================================================= pricing -->
+<section class="section" id="pricing">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Подписка</span>
+      <h2>Одна подписка. Чем дольше — тем дешевле</h2>
+      <p class="lede">Возможности одинаковые на любом сроке: делить нечего,
+        доплачивать за локации или протоколы не нужно. Чем длиннее срок,
+        тем дешевле выходит месяц.</p>
+    </div>
+
+    <div class="sub-grid">
+      <article class="card sub-included reveal">
+        <h3>Что входит</h3>
+        <ul id="subFeatures"></ul>
+
+        <p class="sub-note">
+          <b>Одна подписка — одно устройство одновременно.</b>
+          Добавить ссылку можно хоть на телефон и на ноутбук, но соединение
+          будет держаться на одном из них. Нужно больше — возьмите вторую
+          подписку или настройте VPN <a href="guide.html#setup-router">на
+          роутере</a>: тогда через один слот пойдёт весь дом, включая телевизор
+          и консоль.
+        </p>
+      </article>
+
+      <div class="sub-pick reveal" data-delay="1">
+        <div class="sub-terms" id="subTerms" role="radiogroup" aria-label="Срок подписки">
+          <!-- rendered by app.js from CONFIG.subscription.terms -->
+        </div>
+
+        <div class="sub-foot">
+          <a class="btn btn--primary btn--block btn--lg" id="subCta" data-tg href="#" data-utm="sub">
+            <svg aria-hidden="true"><use href="#i-tg"/></svg>
+            <span id="subCtaLabel">Оформить в Telegram</span>
+          </a>
+          <p class="plan-alt">или <a id="subCheckout" href="checkout.html">оплатить на сайте</a></p>
+        </div>
+      </div>
+    </div>
+
+    <p class="leak-note reveal" style="margin-top:26px">
+      Оплата проходит в боте: выбираете срок, платите, ссылка-подписка
+      приходит следующим сообщением.
+    </p>
+  </div>
+</section>
+
+<!-- ================================================ quiz + calculator -->
+<section class="section section--tight" id="choose">
+  <div class="container">
+    <div class="bento" style="grid-auto-rows:auto">
+      <div class="span-3 reveal">
+        <div class="quiz" id="quiz">
+          <div class="quiz-progress"><i id="quizBar" style="width:33%"></i></div>
+          <div class="quiz-body" id="quizBody">
+            <!-- rendered by app.js -->
+          </div>
+        </div>
+      </div>
+
+      <div class="span-3 reveal" data-delay="1">
+        <article class="card" style="height:100%">
+          <span class="eyebrow" style="margin-bottom:14px">Калькулятор</span>
+          <h3 style="margin-bottom:18px">Сколько вы переплачиваете сейчас</h3>
+          <div class="calc">
+            <div class="calc-control">
+              <label for="calcPrice">Ваш текущий VPN стоит в месяц
+                <b><span id="calcPriceOut">450</span> ₽</b></label>
+              <input type="range" id="calcPrice" min="0" max="1500" step="50" value="450">
+            </div>
+            <div class="calc-out">
+              <div class="o"><div class="k">HollVPN в месяц</div><div class="v" id="calcOurs">— ₽</div></div>
+              <div class="o win"><div class="k">Экономия за год</div><div class="v" id="calcSave">— ₽</div></div>
+            </div>
+          </div>
+          <p style="margin:18px 0 0;font-size:.82rem;color:var(--faint)">
+            Считаем <span id="calcTerm">по выбранному сроку</span> — поменяйте
+            срок в блоке подписки, и расчёт пересчитается. Ползунок слева —
+            то, что вы платите сегодня.</p>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========================================================== guide -->
+<section class="section section--tight" id="guide-teaser">
+  <div class="container">
+    <article class="card reveal" style="padding:clamp(26px,4vw,44px)">
+      <div class="row gap-24" style="justify-content:space-between;align-items:flex-start">
+        <div style="flex:1 1 340px">
+          <span class="eyebrow" style="margin-bottom:14px">Справочник</span>
+          <h2 style="font-size:clamp(1.6rem,1.2rem+1.6vw,2.3rem);margin-bottom:14px">
+            Инструкция для каждого устройства</h2>
+          <p class="lede" style="font-size:1rem">
+            28 статей: настройка на iPhone, Android, Windows, macOS, Linux,
+            Android&nbsp;TV и роутерах Keenetic&nbsp;/&nbsp;OpenWrt, разбор протоколов,
+            решение проблем и всё про оплату. С поиском и командами,
+            которые копируются в один клик.</p>
+          <div class="row gap-12" style="margin-top:22px">
+            <a class="btn btn--primary" href="guide.html">
+              <svg aria-hidden="true"><use href="#i-book"/></svg>
+              Открыть справочник</a>
+            <a class="btn btn--ghost" href="guide.html#troubleshooting-no-connect">Не подключается?</a>
+          </div>
+        </div>
+        <ul style="flex:0 1 300px;list-style:none;margin:0;padding:0;display:grid;gap:8px">
+          <li><a class="btn btn--ghost btn--block" style="justify-content:flex-start" href="guide.html#setup-ios">iPhone и iPad</a></li>
+          <li><a class="btn btn--ghost btn--block" style="justify-content:flex-start" href="guide.html#setup-android">Android</a></li>
+          <li><a class="btn btn--ghost btn--block" style="justify-content:flex-start" href="guide.html#setup-windows">Windows</a></li>
+          <li><a class="btn btn--ghost btn--block" style="justify-content:flex-start" href="guide.html#setup-router">Роутер</a></li>
+        </ul>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ============================================================= faq -->
+<section class="section" id="faq">
+  <div class="container">
+    <div class="section-head reveal">
+      <span class="eyebrow">Вопросы</span>
+      <h2>Спрашивают чаще всего</h2>
+    </div>
+
+    <div class="faq reveal">
+      <details>
+        <summary>Это законно?</summary>
+        <div class="answer"><p>Пользоваться VPN в России законно — запрета для
+          частных лиц нет. Ограничения касаются операторов связи и владельцев
+          сервисов, а также обхода блокировок для доступа к материалам, которые
+          признаны запрещёнными. HollVPN — инструмент шифрования трафика;
+          за то, что вы через него открываете, отвечаете вы.</p></div>
+      </details>
+      <details>
+        <summary>Почему не нужно ставить ваше приложение?</summary>
+        <div class="answer"><p>Потому что своего приложения у нас нет — и это
+          осознанно. Собственные клиенты VPN-сервисов регулярно удаляют
+          из App&nbsp;Store и Google&nbsp;Play, и подписка вместе с ними перестаёт
+          обновляться. HollVPN выдаёт стандартную ссылку-подписку, которую понимают Happ, Streisand,
+          V2Box, Hiddify, v2rayNG, Nekoray и другие открытые клиенты.
+          Пропадёт один — останутся ещё пять.</p></div>
+      </details>
+      <details>
+        <summary>Что будет, если сервер заблокируют?</summary>
+        <div class="answer"><p>Ключ у вас один, а серверов за ним — 16. Если узел
+          становится недоступен, клиент сам переключается на следующий;
+          вручную ничего перевыпускать не нужно. Мы держим резерв IP-адресов
+          и меняем их до того, как это заметят пользователи.</p></div>
+      </details>
+      <details>
+        <summary>Правда, что вы не храните логи?</summary>
+        <div class="answer"><p>Мы не пишем историю подключений, посещённые адреса
+          и DNS-запросы. Серверы работают с файловой системой в оперативной
+          памяти: после перезагрузки на диске физически нечего изымать.
+          Что мы всё-таки храним — Telegram ID для привязки подписки,
+          дату оплаты и срок действия ключа. Без этого невозможно продлить
+          подписку или вернуть деньги.</p></div>
+      </details>
+      <details>
+        <summary>Сколько устройств можно подключить?</summary>
+        <div class="answer"><p>Одна подписка работает на одном устройстве
+          одновременно. Настроить ссылку можно хоть на телефоне и на ноутбуке,
+          но соединение будет держаться на одном из них.</p>
+          <p>Нужно больше — два пути: взять вторую подписку или настроить VPN
+          <a href="guide.html#setup-router">на роутере</a>. Во втором случае
+          через один слот пойдёт весь дом, включая телевизор и консоль,
+          куда клиент не поставить.</p></div>
+      </details>
+      <details>
+        <summary>А если не подойдёт?</summary>
+        <div class="answer"><p>Напишите в поддержку — разберёмся, в чём дело.
+          Чаще всего вопрос решается настройкой: другой протокол, другая локация
+          или раздельное туннелирование. Не подошло совсем — напишите,
+          подскажем, что делать дальше.</p></div>
+      </details>
+      <details>
+        <summary>Работает ли на роутере и телевизоре?</summary>
+        <div class="answer"><p>Да. Для Keenetic и OpenWrt есть отдельные инструкции
+          в <a href="guide.html#setup-router">справочнике</a> — тогда VPN
+          получают все устройства в доме, включая те, куда клиент не поставить.
+          На Android&nbsp;TV работает v2rayNG или Hiddify из магазина.</p></div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================= CTA -->
+<section class="section">
+  <div class="container">
+    <div class="cta-band reveal">
+      <h2>Подписка приходит сразу после оплаты</h2>
+      <p class="lede">Откройте бота, выберите срок, оплатите привычным
+        способом — ссылка-подписка придёт следующим сообщением. Настройка
+        в Happ занимает пару минут.</p>
+
+      <div class="qr-card" style="justify-content:center">
+        <div class="qr-frame"><canvas id="qr" width="148" height="148"
+          aria-label="QR-код со ссылкой на Telegram-бота HollVPN" role="img"></canvas></div>
+        <div class="qr-copy" style="text-align:left;max-width:300px">
+          <p>Наведите камеру телефона — или откройте бота на этом же устройстве.</p>
+          <a class="btn btn--primary btn--block" data-tg href="#" data-utm="cta">
+            <svg aria-hidden="true"><use href="#i-tg"/></svg>
+            Открыть в Telegram</a>
+          <button class="btn btn--ghost btn--block" style="margin-top:8px" data-copy-tg type="button">
+            <svg aria-hidden="true"><use href="#i-copy"/></svg>
+            Скопировать ссылку</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="index.html">
+          <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="hollMarkF" x1="16" y1="2" x2="16" y2="30" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#5BA9F7"/><stop offset="1" stop-color="#1B5FD0"/>
+          </linearGradient>
+        </defs>
+        <path d="M16 2.6 27 6.9v9.3c0 6.5-4.5 11.8-11 13.2C9.5 28 5 22.7 5 16.2V6.9z"
+              fill="url(#hollMarkF)" fill-opacity=".16" stroke="url(#hollMarkF)"
+              stroke-width="2.1" stroke-linejoin="round"/>
+        <path d="M11.7 9.1h3.2v5h2.2v-5h3.2v13.8h-3.2v-5.5h-2.2v5.5h-3.2z" fill="#F2F6FB"/>
+      </svg>
+          <span>Holl<b>VPN</b></span>
+        </a>
+        <p>Быстрый VPN на VLESS&nbsp;+&nbsp;Reality с оплатой в Telegram.
+           Без логов, без лимитов, без своего приложения.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Продукт</h4>
+        <ul>
+          <li><a href="#features">Возможности</a></li>
+          <li><a href="#servers">Серверы</a></li>
+          <li><a href="#pricing">Тарифы</a></li>
+          <li><a href="#compare">Сравнение</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Помощь</h4>
+        <ul>
+          <li><a href="guide.html">Справочник</a></li>
+          <li><a href="guide.html#setup-ios">Настройка iPhone</a></li>
+          <li><a href="guide.html#troubleshooting-no-connect">Не подключается</a></li>
+          <li><a href="#faq">Вопросы и ответы</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Контакты</h4>
+        <ul>
+          <li><a data-tg href="#" data-utm="footer">Telegram-бот</a></li>
+          <li><a data-tg-support href="#">Поддержка</a></li>
+          <li><a data-tg-channel href="#">Канал со статусом</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bot">
+      <span>© <span id="year">2026</span> HollVPN</span>
+      <a href="guide.html#legal-terms">Публичная оферта</a>
+      <a href="guide.html#legal-privacy">Политика конфиденциальности</a>
+      <a href="guide.html#legal-terms">Условия возврата</a>
+      <span class="spacer"></span>
+      <span>Сайт не использует сторонние скрипты и не ставит аналитические cookie.</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ================================================ command palette -->
+<div class="palette-backdrop" id="palette" hidden role="dialog" aria-modal="true" aria-label="Поиск по сайту">
+  <div class="palette">
+    <div class="palette-input">
+      <svg aria-hidden="true"><use href="#i-search"/></svg>
+      <input type="text" id="paletteInput" placeholder="Найти раздел, статью или локацию…"
+             autocomplete="off" spellcheck="false" aria-controls="paletteResults" role="combobox"
+             aria-expanded="true" aria-autocomplete="list">
+      <kbd>Esc</kbd>
+    </div>
+    <div class="palette-results" id="paletteResults" role="listbox" aria-label="Результаты поиска"></div>
+    <div class="palette-foot">
+      <span><kbd>↑</kbd><kbd>↓</kbd> выбрать</span>
+      <span><kbd>↵</kbd> перейти</span>
+      <span><kbd>Esc</kbd> закрыть</span>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/world.js"></script>
+<script src="assets/js/globe.js"></script>
+<script src="assets/js/qr.js"></script>
+<script src="assets/js/leakcheck.js"></script>
+<script src="assets/js/kb-data.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

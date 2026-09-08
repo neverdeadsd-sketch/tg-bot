@@ -1,0 +1,41 @@
+# Тесты платёжного кода.
+#
+# Проверяются оба варианта: серверный (checkout/) и Cloudflare Worker
+# (worker/). Логика у них общая, и этот прогон существует ровно затем,
+# чтобы правка ради одного не сломала другой незаметно.
+
+name: Оплата
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'checkout/**'
+      - 'worker/**'
+      - '.github/workflows/checkout.yml'
+  pull_request:
+    paths:
+      - 'checkout/**'
+      - 'worker/**'
+      - '.github/workflows/checkout.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Тесты
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # node:sqlite и встроенный тест-раннер — отсюда и требование к версии
+          node-version: '22'
+      - name: Серверный чекаут
+        run: node --test
+        working-directory: checkout
+      - name: Cloudflare Worker
+        run: node --test
+        working-directory: worker

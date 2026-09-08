@@ -1,0 +1,88 @@
+"""Конфигурация бота.
+
+Секретов в этом файле нет и быть не должно. Всё, что нельзя показать —
+токены, пути к панели, uuid администратора, реквизиты перевода, — читается
+из .env, а .env в репозиторий не попадает (см. .gitignore).
+
+Раньше часть этого была вписана прямо сюда, и файл нельзя было ни
+закоммитить, ни показать.
+"""
+import os
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+_missing = []
+
+
+def _env(name: str, default: str = "", required: bool = False) -> str:
+    """Значение из окружения. required=True — запомнить, если не задано."""
+    value = os.getenv(name, default)
+    value = value.strip() if value else ""
+    if required and not value:
+        _missing.append(name)
+    return value
+
+
+BOT_TOKEN = _env("BOT_TOKEN", required=True)
+ADMIN_ID = int(_env("ADMIN_ID", "0") or 0)
+DATABASE_NAME = _env("DATABASE_NAME", "hollvpn.db")
+BOT_NAME = _env("BOT_NAME", "HOLL VPN")
+SUPPORT_USERNAME = _env("SUPPORT_USERNAME", "@hollvpnsupport")
+MINI_APP_URL = _env("MINI_APP_URL").rstrip("/")
+CRYPTOBOT_TOKEN = _env("CRYPTOBOT_TOKEN")
+MERGED_SUBSCRIPTION_URL = _env("MERGED_SUBSCRIPTION_URL")
+
+# Цены — не секрет, им место в коде: так видно, когда они менялись.
+PRICES = {
+    "30": 199,
+    "90": 499,
+    "180": 899,
+    "365": 1499,
+}
+
+# Реквизиты перевода покупатель видит, но это персональные данные —
+# в репозитории им не место.
+PAYMENT_SBP_PHONE = _env("PAYMENT_SBP_PHONE")
+PAYMENT_CARD = _env("PAYMENT_CARD")
+
+PAYMENT_TEXT = f"""
+Переведите указанную сумму по реквизитам ниже.
+
+<b>СБП</b>
+<code>{PAYMENT_SBP_PHONE}</code>
+
+<b>Карта</b>
+<code>{PAYMENT_CARD}</code>
+
+После оплаты нажмите кнопку «Я оплатил».
+""".strip()
+
+
+SERVER_FINLAND = "finland"
+SERVER_NETHERLANDS = "netherlands"
+
+
+def _hiddify(prefix: str) -> dict:
+    return {
+        "base_url": _env(f"{prefix}_BASE_URL", required=True),
+        "proxy_path": _env(f"{prefix}_PROXY_PATH", required=True),
+        "proxy_path_admin": _env(f"{prefix}_PROXY_PATH_ADMIN", required=True),
+        "admin_uuid": _env(f"{prefix}_ADMIN_UUID", required=True),
+    }
+
+
+HIDDIFY_SERVERS = {
+    SERVER_FINLAND: _hiddify("HIDDIFY_FI"),
+    SERVER_NETHERLANDS: _hiddify("HIDDIFY_NL"),
+}
+
+# Падаем сразу и с понятным текстом. Бот без доступа к панели не выдаст
+# подписку — лучше не запуститься, чем принять оплату и не выдать доступ.
+if _missing:
+    raise RuntimeError(
+        "В .env не заданы переменные: " + ", ".join(_missing) + ".\n"
+        "Проверьте /opt/tg-bot/.env — значения должны были попасть туда "
+        "из прежнего config.py."
+    )
