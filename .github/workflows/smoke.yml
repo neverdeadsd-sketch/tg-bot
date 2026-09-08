@@ -1,0 +1,87 @@
+# Проверка живого API оплаты.
+#
+# Запускается вручную. Нужна затем, что из среды разработки адрес
+# workers.dev недоступен, а проверять оплату по скриншотам с телефона —
+# медленно и ненадёжно: браузер показывает json не так, как отдаёт сервер.
+# Раннер GitHub ходит в сеть свободно, и его вывод виден целиком.
+
+name: Проверка оплаты
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Адрес API, без косой черты в конце
+        required: true
+        default: https://tg-bot.neverdeadsd.workers.dev
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Живой API
+    runs-on: ubuntu-latest
+    env:
+      # Через окружение, а не подстановкой в скрипт: иначе введённое
+      # значение попало бы прямо в команду оболочки.
+      BASE: ${{ inputs.base }}
+    steps:
+      - name: Опросить маршруты
+        run: |
+          set -u
+          fail=0
+
+          probe() {   # описание  метод  путь  ожидаемый-код  [тело]
+            local desc="$1" method="$2" path="$3" want="$4" body="${5-}"
+            local code ct
+            if [ -n "$body" ]; then
+              code=$(curl -sS -m 25 -o /tmp/body -D /tmp/head -w '%{http_code}' \
+                     -X "$method" -H 'Content-Type: application/json' \
+                     -d "$body" "$BASE$path" 2>/dev/null || echo 000)
+            else
+              code=$(curl -sS -m 25 -o /tmp/body -D /tmp/head -w '%{http_code}' \
+                     -X "$method" "$BASE$path" 2>/dev/null || echo 000)
+            fi
+            ct=$(grep -i '^content-type:' /tmp/head | head -1 | tr -d '\r' | cut -d' ' -f2-)
+            printf '\n%s\n  %s %s\n  код: %s   тип: %s\n' \
+                   "$desc" "$method" "$path" "$code" "${ct:-—}"
+            printf '  ответ: %s\n' "$(head -c 400 /tmp/body | tr '\n' ' ')"
+            if [ "$code" != "$want" ]; then
+              printf '  ✗ ожидался %s\n' "$want"
+              fail=1
+            else
+              printf '  ✓\n'
+            fi
+          }
+
+          echo "Проверяю $BASE"
+
+          probe 'Состояние — как его просит программа' \
+                GET /api/health 200
+          probe 'Несуществующий заказ' \
+                GET /api/payment/проверка 404
+          probe 'Неизвестный маршрут' \
+                GET /api/nope 404
+          probe 'Заказ на несуществующий срок' \
+                POST /api/checkout 400 '{"days":7,"telegram":"someuser"}'
+          probe 'Заказ с коротким именем' \
+                POST /api/checkout 400 '{"days":90,"telegram":"ab"}'
+          probe 'Вебхук без подтверждения от ЮKassa' \
+                POST /api/yookassa/webhook 403 '{"object":{"id":"нет-такого"}}'
+
+          echo
+          echo '--- Состояние глазами браузера (Accept: text/html) ---'
+          curl -sS -m 25 -H 'Accept: text/html' -D /tmp/head2 -o /tmp/page.html \
+               "$BASE/api/health" 2>/dev/null || true
+          grep -i '^content-type:' /tmp/head2 | tr -d '\r' || true
+          grep -oE '<h1[^>]*>[^<]*</h1>|<dd>[^<]*</dd>' /tmp/page.html || \
+            echo '  страницы нет — Worker отдал не html'
+
+          echo
+          if [ "$fail" -eq 0 ]; then
+            echo '✓ Все маршруты отвечают как надо.'
+          else
+            echo '✗ Есть расхождения — смотрите отметки выше.'
+            exit 1
+          fi
