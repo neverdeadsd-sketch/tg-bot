@@ -86,23 +86,38 @@ fi
 
 bold "Проверяю, что nginx отдаёт домен"
 
+# Кто на самом деле держит 80-й порт. Имена процессов, без pid и fd:
+# ss печатает users:(("haproxy",pid=997433,fd=16)) — нужен только haproxy.
+PORT80=""
+if command -v ss >/dev/null 2>&1; then
+  PORT80="$(ss -lntpH 2>/dev/null | awk '$4 ~ /:80$/ {print $NF}' \
+            | grep -oE '"[^"]+"' | tr -d '"' | sort -u | paste -sd, -)"
+fi
+
+# Входной точкой сервера может быть не nginx, а haproxy, traefik, caddy или
+# панель VPN. Тогда «поднимите nginx» — вредный совет: порт занят, а через
+# того, кто его занял, скорее всего ходит нужный трафик.
+if [ -n "$PORT80" ] && ! printf '%s' "$PORT80" | grep -q nginx; then
+  die "80-й порт держит не nginx, а: $PORT80
+
+  Значит входная точка этого сервера — он, и сайт нужно заводить через
+  него, а не поднимать nginx на занятый порт.
+
+  Ничего не перезапускайте вслепую: через этот сервис почти наверняка
+  ходит трафик, который вам нужен. Сначала посмотрите, что он делает:
+      ss -lntp | grep -E ':(80|443) '
+      ps -o pid,lstart,args -C ${PORT80%%,*} --no-headers"
+fi
+
 if ! systemctl is-active --quiet nginx; then
   die "nginx не запущен. Сначала поднимите его:
       nginx -t                  # что именно не так с конфигурацией
       systemctl start nginx
       systemctl status nginx --no-pager
 
-  Если не стартует из-за занятого порта — посмотрите, кто его держит:
-      ss -lntp | grep ':80 '
-
   Если конфигурацию сломал прошлый запуск certbot --nginx — рядом лежат
   резервные копии, можно вернуть последнюю:
       ls -t $NGINX_CONF.bak.* | head -3"
-fi
-
-PORT80=""
-if command -v ss >/dev/null 2>&1; then
-  PORT80="$(ss -lntpH 2>/dev/null | awk '$4 ~ /:80$/ {print $NF}' | head -1)"
 fi
 ok "nginx работает${PORT80:+, 80-й порт за ${PORT80}}"
 
