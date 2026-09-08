@@ -56,6 +56,13 @@ function json(status, payload, headers) {
   });
 }
 
+/* Текст ошибки уходит в разметку — экранируем, хотя он и наш собственный:
+ * в него подставляются имена переменных окружения. */
+function escapeHtml(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function wantsHtml(request) {
   return (request.headers.get('Accept') || '').includes('text/html');
 }
@@ -65,6 +72,7 @@ function wantsHtml(request) {
 function healthPage(status, body, cors) {
   const ok = body.status === 'ok';
   const noSchema = body.status === 'no_schema';
+  const notConfigured = body.status === 'not_configured';
   const html = `<!doctype html><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Оплата HollVPN — состояние</title>
@@ -84,13 +92,17 @@ function healthPage(status, body, cors) {
   dd { margin:0; font-weight:600; }
 </style>
 <div class="card">
-  <h1>${noSchema ? 'Не хватает таблиц' : ok ? 'Оплата работает' : 'Нужно вмешательство'}</h1>
-  <p>${noSchema
+  <h1>${notConfigured ? 'Не хватает настройки'
+      : noSchema ? 'Не хватает таблиц'
+      : ok ? 'Оплата работает' : 'Нужно вмешательство'}</h1>
+  <p>${notConfigured
+      ? escapeHtml(body.error)
+      : noSchema
       ? 'База привязана, но схема в ней не выполнена. Откройте базу D1 в панели Cloudflare, вкладка Console, и выполните содержимое worker/schema.sql.'
       : ok
       ? 'Сервис оплаты поднят, база на месте, способ сообщить об оплате настроен.'
       : 'Есть оплаченные заказы, по которым подписка не выдана. Деньги получены, услуга — нет.'}</p>
-  ${noSchema ? '' : `<dl>
+  ${noSchema || notConfigured ? '' : `<dl>
     <dt>Состояние</dt><dd>${body.status}</dd>
     <dt>Оплачено, но не выдано</dt><dd>${body.stranded_orders}</dd>
     <dt>Выдача</dt><dd>${body.delivery_mode === 'auto'
@@ -277,15 +289,26 @@ async function handleStatus(cfg, store, orderId, cors) {
 
 export default {
   async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+
     let cfg;
     try {
       cfg = load(env);
     } catch (e) {
       /* Настройка неполная — принимать деньги нельзя. Серверный вариант
        * в этом случае не поднимается; Worker поднять невозможно «наполовину»,
-       * поэтому он честно отвечает, что оплата недоступна. */
+       * поэтому он честно отвечает, что оплата недоступна.
+       *
+       * Причину называем только на странице состояния: это имена
+       * ненастроенных переменных, не их значения. Знать их полезно тому,
+       * кто настраивает, и бесполезно тому, кто ищет чем поживиться, —
+       * а без этого приходится гадать и разворачивать заново по кругу. */
       log('конфигурация не принята:', e.message);
-      return json(503, { error: 'Оплата на сайте временно недоступна. Оплатите в боте.' });
+      const generic = 'Оплата на сайте временно недоступна. Оплатите в боте.';
+      if (url.pathname !== '/api/health') return json(503, { error: generic });
+
+      const body = { status: 'not_configured', error: e.message };
+      return wantsHtml(request) ? healthPage(503, body, {}) : json(503, body, {});
     }
 
     const cors = corsHeaders(request, cfg);
@@ -297,7 +320,6 @@ export default {
     }
 
     const store = open(env.DB);
-    const url = new URL(request.url);
     const ip = clientIp(request);
 
     try {
