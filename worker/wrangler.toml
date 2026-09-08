@@ -31,8 +31,8 @@ workers_dev = true
 [[d1_databases]]
 binding = "DB"
 database_name = "hollvpn-orders"
-# ↓ подставьте id базы, который покажет Cloudflare после её создания
-database_id = "ЗАПОЛНИТЕ-ID-БАЗЫ"
+# Идентификатор базы, а не секрет: он просто адресует её в аккаунте.
+database_id = "88cf0b97-a910-4810-8fe4-3dfae3eef30a"
 
 [vars]
 # Адрес сайта: из него собирается return_url после оплаты и он же
