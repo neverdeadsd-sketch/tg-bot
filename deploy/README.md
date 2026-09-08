@@ -49,23 +49,42 @@ sudo PORT=8090 bash /tmp/hollvpn/deploy/install.sh
 
 ## Что заполнить руками
 
+Проще всего — скриптом с вопросами:
+
 ```bash
-nano /opt/hollvpn/checkout/.env
+sudo bash /opt/hollvpn/deploy/set-env.sh
 ```
 
-- `YOOKASSA_SECRET_KEY` — кабинет ЮKassa → «Интеграция» → «Ключи API».
-- `FULFILMENT_URL` — адрес в вашем боте, который принимает POST об оплате
-  и выдаёт подписку. Формат запроса — в `checkout/README.md`.
+Он спросит по очереди, что нужно, покажет уже заполненное в замаскированном
+виде (Enter — оставить как есть), проверит, что всё на месте, и сам запустит
+службу. Секреты вводятся скрыто и **не попадают в историю оболочки** —
+в отличие от варианта, где их передают аргументом команды.
 
-Остальное скрипт проставил сам: `PUBLIC_URL`, `PORT`, `TRUST_PROXY=true`
-и путь к базе.
+Что он спросит:
 
-Потом:
+| Значение | Где взять |
+|---|---|
+| `YOOKASSA_SECRET_KEY` | Кабинет ЮKassa → «Интеграция» → «Ключи API» |
+| `TELEGRAM_BOT_TOKEN` | @BotFather |
+| `TELEGRAM_ADMIN_CHAT_ID` | @userinfobot ответит числом |
+| `FULFILMENT_URL` | Адрес в боте для автовыдачи; можно позже |
+
+Нужен ключ ЮKassa и хотя бы один способ сообщить об оплате — Telegram
+или эндпоинт бота. Без этого служба не запустится.
+
+### Если предпочитаете редактор
 
 ```bash
-systemctl start hollvpn-checkout
-systemctl status hollvpn-checkout
-curl localhost:8080/health
+sudo nano /opt/hollvpn/checkout/.env
+```
+
+Сохранить: <kbd>Ctrl</kbd>+<kbd>O</kbd>, <kbd>Enter</kbd>, выйти:
+<kbd>Ctrl</kbd>+<kbd>X</kbd>. Если `nano` нет — `apt-get install -y nano`.
+После правки:
+
+```bash
+sudo systemctl restart hollvpn-checkout
+sudo systemctl status hollvpn-checkout
 ```
 
 ## Обновление
