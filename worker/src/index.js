@@ -56,6 +56,53 @@ function json(status, payload, headers) {
   });
 }
 
+function wantsHtml(request) {
+  return (request.headers.get('Accept') || '').includes('text/html');
+}
+
+/* Страница проверки. Ничего чувствительного: состояние, число оплаченных
+ * но невыданных заказов и способ выдачи. Ни ключей, ни адресов. */
+function healthPage(status, body, cors) {
+  const ok = body.status === 'ok';
+  const noSchema = body.status === 'no_schema';
+  const html = `<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Оплата HollVPN — состояние</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { margin:0; min-height:100dvh; display:grid; place-items:center;
+         font:16px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+         background:#0b1220; color:#dde7f3; padding:24px; }
+  .card { max-width:32rem; width:100%; background:#131e2e; border:1px solid #223047;
+          border-radius:14px; padding:24px 22px; }
+  h1 { margin:0 0 4px; font-size:1.5rem; letter-spacing:-.02em;
+       color:${ok ? '#4ade80' : '#fbbf24'}; }
+  p { margin:0 0 18px; color:#8ba0b8; font-size:.95rem; }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:8px 16px; margin:0;
+       font-variant-numeric:tabular-nums; }
+  dt { color:#8ba0b8; font-size:.9rem; }
+  dd { margin:0; font-weight:600; }
+</style>
+<div class="card">
+  <h1>${noSchema ? 'Не хватает таблиц' : ok ? 'Оплата работает' : 'Нужно вмешательство'}</h1>
+  <p>${noSchema
+      ? 'База привязана, но схема в ней не выполнена. Откройте базу D1 в панели Cloudflare, вкладка Console, и выполните содержимое worker/schema.sql.'
+      : ok
+      ? 'Сервис оплаты поднят, база на месте, способ сообщить об оплате настроен.'
+      : 'Есть оплаченные заказы, по которым подписка не выдана. Деньги получены, услуга — нет.'}</p>
+  ${noSchema ? '' : `<dl>
+    <dt>Состояние</dt><dd>${body.status}</dd>
+    <dt>Оплачено, но не выдано</dt><dd>${body.stranded_orders}</dd>
+    <dt>Выдача</dt><dd>${body.delivery_mode === 'auto'
+      ? 'автоматическая, через бота' : 'вручную, с уведомлением в Telegram'}</dd>
+  </dl>`}
+</div>`;
+  return new Response(html, {
+    status,
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', ...cors }
+  });
+}
+
 function corsHeaders(request, cfg) {
   const h = {
     'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
@@ -255,11 +302,35 @@ export default {
 
     try {
       if (request.method === 'GET' && url.pathname === '/api/health') {
-        const stranded = await store.stranded();
-        return json(stranded.length ? 503 : 200, {
+        let stranded;
+        try {
+          stranded = await store.stranded();
+        } catch (e) {
+          /* Самая частая беда при установке: база привязана, а схему в ней
+           * не выполнили. Без этой ветки ответом было бы «internal error»,
+           * по которому не догадаться, что делать. */
+          const noSchema = /no such table/i.test(e && e.message);
+          if (!noSchema) throw e;
+          log('в базе нет таблиц — не выполнена schema.sql');
+          const body = {
+            status: 'no_schema',
+            error: 'В базе нет таблиц. Выполните worker/schema.sql в консоли базы D1.'
+          };
+          return wantsHtml(request) ? healthPage(503, body, cors) : json(503, body, cors);
+        }
+
+        const status = stranded.length ? 503 : 200;
+        const body = {
           status: stranded.length ? 'attention' : 'ok',
-          stranded_orders: stranded.length
-        }, cors);
+          stranded_orders: stranded.length,
+          delivery_mode: cfg.deliveryMode
+        };
+        /* Эту страницу открывают браузером с телефона, а json браузер
+         * с nosniff охотно скачивает файлом вместо показа. Человеку —
+         * страницу, программам — прежний json. */
+        return wantsHtml(request)
+          ? healthPage(status, body, cors)
+          : json(status, body, cors);
       }
       if (request.method === 'POST' && url.pathname === '/api/checkout') {
         return await handleCheckout(request, cfg, store, ip, cors);
