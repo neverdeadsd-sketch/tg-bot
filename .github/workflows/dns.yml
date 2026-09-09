@@ -1,0 +1,64 @@
+# Записи домена в Cloudflare.
+#
+# Зачем через Actions: DNS домена — единственная часть, которую до сих пор
+# приходилось править мышью в панели и пересказывать скриншотами. Скриншот
+# не показывает, включено ли проксирование и не потерялся ли поддомен узла,
+# а цена такой потери — неработающий VPN у клиентов. Здесь состояние зоны
+# видно целиком и в логе, который можно перечитать.
+
+name: Записи домена
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Применить изменения (без галочки — только показать)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dns
+  cancel-in-progress: false
+
+jobs:
+  dns:
+    name: ${{ inputs.apply && 'Применить' || 'Показать' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Проверить, что доступ настроен
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo '::error::Не задан секрет репозитория CLOUDFLARE_API_TOKEN'
+            exit 1
+          fi
+
+      - name: Состояние зоны
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          APPLY: ${{ inputs.apply && '1' || '0' }}
+        run: bash scripts/cf-dns.sh
+
+      - name: Проверить, что домен уже отвечает
+        if: ${{ inputs.apply }}
+        run: |
+          # Записи вступят в силу только после того, как реестр .ru
+          # опубликует делегирование на Cloudflare. До тех пор проверка
+          # честно скажет, что домен ещё смотрит на старые серверы, —
+          # это не ошибка сборки, а состояние реестра.
+          echo 'Реестр .ru отдаёт:'
+          dig +short NS hollvpn.ru @a.dns.ripn.net | sed 's/^/  /'
+          if dig +short NS hollvpn.ru @a.dns.ripn.net | grep -q cloudflare; then
+            echo 'Делегирование опубликовано, проверяю сайт:'
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 https://hollvpn.ru/ || echo 000)
+            echo "  https://hollvpn.ru/ → $code"
+          else
+            echo '::notice::Делегирование на Cloudflare ещё не опубликовано реестром .ru.'
+            echo 'Записи заведены и заработают сами, как только реестр обновится.'
+          fi
