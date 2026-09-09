@@ -93,6 +93,21 @@ def rename(line, label):
     return f"{line.split('#')[0]}#{urllib.parse.quote(label)}"
 
 
+def check_url(prefix, url):
+    """Отличить незаполненный образец от настоящего адреса.
+
+    Иначе первым сообщением будет что-нибудь про кодировку ASCII —
+    формально верное и совершенно бесполезное.
+    """
+    if not url.startswith(('http://', 'https://')):
+        die(f'{prefix}_URL не похож на адрес: должен начинаться с https://')
+    host = urllib.parse.urlsplit(url).netloc
+    if not host.isascii() or any(w in url for w in ('АДРЕС', 'ПУТЬ', 'UUID')):
+        die(f'{prefix}_URL — это заполнитель из образца, а не настоящий адрес.\n'
+            f'  Перенести адреса из старого скрипта:\n'
+            f'    sudo bash /opt/hollvpn/tools/merge-sub/init-env.sh')
+
+
 def main():
     conf = read_conf()
     insecure = conf.get('INSECURE', '0') == '1'
@@ -102,6 +117,7 @@ def main():
         url = conf.get(f'{prefix}_URL')
         if not url:
             die(f'в {CONF} не задан {prefix}_URL')
+        check_url(prefix, url)
         sources.append((prefix, url, conf.get(f'{prefix}_NAME', prefix)))
 
     lines = []
