@@ -30,14 +30,24 @@ fi_lte    = find_line(sub2, ["hysteria2://", "fi.hollvpn.ru"])
 
 ```bash
 sudo cp /opt/hollvpn/tools/merge-sub/merge_sub.py /root/merge_sub.py
-sudo cp /opt/hollvpn/tools/merge-sub/merge_sub.env.example /root/.merge_sub.env
-sudo chmod 600 /root/.merge_sub.env
-sudo nano /root/.merge_sub.env
+sudo bash /opt/hollvpn/tools/merge-sub/init-env.sh
 ```
 
-В файл впишите два адреса — их видно в старом `/root/merge_sub.sh`,
-это две строки `curl`. Прежний скрипт **не удаляйте**, пока новый
-не отработает: он пригодится, чтобы сверить результат.
+Второй скрипт переносит адреса подписок из старого `/root/merge_sub.sh`
+в `/root/.merge_sub.env` и ставит права 600. Переписывать их руками
+не нужно — и не стоит: в этих адресах UUID подписок, и каждый раз, когда
+они проходят через чужие руки или чужой экран, это лишний повод их менять.
+В вывод скрипт печатает только маску.
+
+Прежний `merge_sub.sh` **не удаляйте**, пока новый не отработает:
+из него и берутся адреса.
+
+Если адреса подписок сменились — например, вы отозвали пользователей
+в панели Hiddify, — поправьте `/root/.merge_sub.env` вручную:
+
+```bash
+sudo nano /root/.merge_sub.env
+```
 
 Первый запуск:
 
