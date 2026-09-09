@@ -77,3 +77,43 @@ jobs:
           path: site
       - id: deployment
         uses: actions/deploy-pages@v4
+
+      # Проверяем сам домен, а не адрес Pages. Ни владелец с телефона,
+      # ни агент из своего контейнера до hollvpn.ru не достают, и без
+      # этого шага «сайт выложен» и «сайт открывается» — разные вещи,
+      # которые никто не различит.
+      - name: Сайт открывается на домене
+        run: |
+          domain="$(cat site/CNAME)"
+          echo "Домен из site/CNAME: $domain"
+
+          for scheme in http https; do
+            code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 30 \
+                        -L "$scheme://$domain/" 2>/dev/null || echo 000)
+            echo "  $scheme → $code"
+            eval "${scheme}_code=$code"
+          done
+
+          if [ "$https_code" = 200 ] && grep -qi 'hollvpn' /tmp/body; then
+            echo 'Сайт отвечает на домене по HTTPS.'
+            exit 0
+          fi
+
+          # Разбираем, что именно не готово: у каждой причины свой срок
+          # и своё действие, и путать их дороже, чем разбирать.
+          if [ "$https_code" = 000 ] && [ "$http_code" = 200 ]; then
+            echo '::notice::HTTP работает, HTTPS ещё нет — Pages выпускает сертификат.'
+            echo 'Это занимает до пятнадцати минут после того, как домен привязан. Ничего делать не нужно.'
+          elif [ "$http_code" = 404 ] || [ "$https_code" = 404 ]; then
+            echo '::warning::Домен резолвится, но Pages отвечает 404 — домен ему ещё не привязан.'
+            echo 'Settings → Pages → Custom domain должен показывать этот домен.'
+          elif [ "$http_code" = 000 ] && [ "$https_code" = 000 ]; then
+            echo '::warning::Домен не отвечает вовсе — записи ещё не разошлись по резолверам.'
+          else
+            echo "::warning::Неожиданный ответ: http $http_code, https $https_code."
+            head -c 300 /tmp/body || true
+          fi
+
+          # Не роняем выкладку: сайт выложен, а привязка домена и
+          # сертификат живут своим сроком и на артефакт не влияют.
+          echo 'Выкладка прошла; домен проверьте по строкам выше.'
