@@ -87,12 +87,25 @@ jobs:
           domain="$(cat site/CNAME)"
           echo "Домен из site/CNAME: $domain"
 
-          for scheme in http https; do
-            code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 30 \
-                        -L "$scheme://$domain/" 2>/dev/null || echo 000)
-            echo "  $scheme → $code"
-            eval "${scheme}_code=$code"
-          done
+          # Код и признак неудачи разделены намеренно. При обрыве curl всё
+          # равно печатает %{http_code} — «000», — и если добавить к этому
+          # запасное значение через ||, коды склеятся в «000000», после чего
+          # ни одно сравнение не сойдётся. Поэтому запасное значение
+          # присваивается, а не дописывается.
+          probe() {   # адрес [доп. ключи curl] → печатает код
+            local url=$1; shift
+            local code
+            code=$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 30 "$@" "$url" 2>/dev/null) \
+              || code=000
+            printf '%s' "$code"
+          }
+
+          # http без -L: пока сертификата нет, переход на https оборвётся,
+          # и ответ «000» скрыл бы то, что домен на самом деле уже отвечает.
+          http_code=$(probe "http://$domain/")
+          https_code=$(probe "https://$domain/" -L)
+          echo "  http  → $http_code"
+          echo "  https → $https_code"
 
           if [ "$https_code" = 200 ] && grep -qi 'hollvpn' /tmp/body; then
             echo 'Сайт отвечает на домене по HTTPS.'
@@ -100,19 +113,27 @@ jobs:
           fi
 
           # Разбираем, что именно не готово: у каждой причины свой срок
-          # и своё действие, и путать их дороже, чем разбирать.
-          if [ "$https_code" = 000 ] && [ "$http_code" = 200 ]; then
-            echo '::notice::HTTP работает, HTTPS ещё нет — Pages выпускает сертификат.'
-            echo 'Это занимает до пятнадцати минут после того, как домен привязан. Ничего делать не нужно.'
-          elif [ "$http_code" = 404 ] || [ "$https_code" = 404 ]; then
-            echo '::warning::Домен резолвится, но Pages отвечает 404 — домен ему ещё не привязан.'
-            echo 'Settings → Pages → Custom domain должен показывать этот домен.'
-          elif [ "$http_code" = 000 ] && [ "$https_code" = 000 ]; then
-            echo '::warning::Домен не отвечает вовсе — записи ещё не разошлись по резолверам.'
-          else
-            echo "::warning::Неожиданный ответ: http $http_code, https $https_code."
-            head -c 300 /tmp/body || true
-          fi
+          # и своё действие, и путать их дороже, чем разобрать.
+          case "$http_code:$https_code" in
+            200:000|301:000|302:000)
+              echo '::notice::Домен отвечает, HTTPS ещё нет — Pages выпускает сертификат.'
+              echo 'Это занимает до пятнадцати минут после привязки домена. Делать ничего не нужно.'
+              echo 'Пока сертификата нет, оплата на сайте не пройдёт: Worker пускает'
+              echo 'только https-origin. Бот принимает оплату как обычно.'
+              ;;
+            404:*|*:404)
+              echo '::warning::Домен резолвится, но Pages отвечает 404 — домен ему ещё не привязан.'
+              echo 'Settings → Pages → Custom domain должен показывать этот домен.'
+              ;;
+            000:000)
+              echo '::warning::Домен не отвечает вовсе — записи ещё не разошлись по резолверам.'
+              ;;
+            *)
+              echo "::warning::Неожиданный ответ: http $http_code, https $https_code."
+              head -c 300 /tmp/body || true
+              echo
+              ;;
+          esac
 
           # Не роняем выкладку: сайт выложен, а привязка домена и
           # сертификат живут своим сроком и на артефакт не влияют.
