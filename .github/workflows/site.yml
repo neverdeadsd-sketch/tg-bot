@@ -83,9 +83,49 @@ jobs:
       # этого шага «сайт выложен» и «сайт открывается» — разные вещи,
       # которые никто не различит.
       - name: Сайт открывается на домене
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           domain="$(cat site/CNAME)"
           echo "Домен из site/CNAME: $domain"
+
+          # Состояние сертификата спрашиваем у самого GitHub. Снаружи видно
+          # только «https не открывается», а это одинаково выглядит и когда
+          # сертификат выпускается, и когда выпуск давно провалился и сам
+          # уже не повторится. GitHub знает разницу и называет её словом.
+          pages=$(curl -sS --max-time 30 \
+                    -H "Authorization: Bearer $GH_TOKEN" \
+                    -H 'Accept: application/vnd.github+json' \
+                    "https://api.github.com/repos/$REPO/pages") || pages=''
+
+          cert_state=''
+          if [ -n "$pages" ] && printf '%s' "$pages" | jq -e . >/dev/null 2>&1; then
+            cert_state=$(printf '%s' "$pages" | jq -r '.https_certificate.state // ""')
+            echo 'Что о домене говорит сам GitHub:'
+            printf '%s' "$pages" | jq -r '
+              "  домен ............ " + (.cname // "не задан"),
+              "  переход на HTTPS . " + (if .https_enforced then "включён" else "выключен" end),
+              "  сертификат ....... " + (.https_certificate.state // "нет данных")'
+            desc=$(printf '%s' "$pages" | jq -r '.https_certificate.description // ""')
+            [ -n "$desc" ] && echo "  ................... $desc"
+          else
+            echo '  состояние сертификата спросить не удалось'
+          fi
+
+          # Состояния, из которых выпуск сам по себе уже не пойдёт: ждать
+          # тут можно бесконечно, домен надо перепривязать. «approved» сюда
+          # не входит — это, наоборот, выпущенный сертификат.
+          cert_stuck=''
+          case "$cert_state" in
+            dns_changed|bad_authz|errored|authorization_revoked)
+              cert_stuck=1
+              echo "::warning::Выпуск сертификата сам не идёт — состояние «$cert_state»."
+              echo 'Перепривяжите домен: Settings → Pages → очистить Custom domain,'
+              echo 'сохранить, вписать домен заново, сохранить. Это запрашивает'
+              echo 'сертификат заново. Между сохранениями домен ненадолго отдаёт 404.'
+              ;;
+          esac
 
           # Код и признак неудачи разделены намеренно. При обрыве curl всё
           # равно печатает %{http_code} — «000», — и если добавить к этому
@@ -156,6 +196,10 @@ jobs:
                 # Ждать тут нечего: пока старые записи в зоне, выпуск
                 # сертификата будет проваливаться сколько угодно раз.
                 echo '::warning::HTTPS не появится, пока в зоне остаются прежние записи (см. выше).'
+              elif [ -n "$cert_stuck" ]; then
+                # Причина уже названа выше, повторять «подождите» нельзя:
+                # ждать нечего, нужно действие.
+                :
               else
                 echo '::notice::Домен отвечает, HTTPS ещё нет — Pages выпускает сертификат.'
                 echo 'Это занимает до пятнадцати минут после привязки домена. Делать ничего не нужно.'
