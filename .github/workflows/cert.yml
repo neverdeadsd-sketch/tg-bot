@@ -1,0 +1,166 @@
+# Перепривязка домена, чтобы GitHub запросил сертификат.
+#
+# Зачем отдельно: выпуск сертификата начинается один раз — когда домен
+# привязывают. Если в этот момент DNS показывал не туда, проверка падает,
+# и сама она больше не повторяется: в API у домена просто нет объекта
+# сертификата, и ждать можно бесконечно. Единственный способ начать
+# заново — сохранить домен ещё раз.
+#
+# Руками это делается в Settings → Pages: очистить Custom domain,
+# сохранить, вписать заново, сохранить. Здесь то же самое, но без
+# человека и с журналом: между очисткой и возвратом домен отдаёт 404,
+# поэтому возврат идёт сразу и с повторами, а не «когда-нибудь».
+
+name: Перезапросить сертификат
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  cert:
+    name: Перепривязать домен
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Перепривязать и дождаться сертификата
+        run: |
+          domain="$(cat site/CNAME)"
+          api="https://api.github.com/repos/$REPO/pages"
+
+          get() {
+            curl -sS --max-time 30 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' "$api"
+          }
+
+          put() {   # тело → печатает код ответа
+            local code
+            code=$(curl -sS --max-time 30 -o /tmp/put.out -w '%{http_code}' \
+              -X PUT \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'Content-Type: application/json' \
+              --data "$1" "$api") || code=000
+            printf '%s' "$code"
+          }
+
+          state() { printf '%s' "$1" | jq -r '.https_certificate.state // "нет данных"'; }
+
+          before=$(get)
+          echo 'Было:'
+          printf '%s' "$before" | jq -r '
+            "  домен ............ " + (.cname // "не задан"),
+            "  переход на HTTPS . " + (if .https_enforced then "включён" else "выключен" end),
+            "  сертификат ....... " + (.https_certificate.state // "нет данных")'
+
+          # Работаем только со своим доменом. Если в настройках стоит что-то
+          # другое, это чужая настройка — трогать её нельзя.
+          current=$(printf '%s' "$before" | jq -r '.cname // ""')
+          if [ -n "$current" ] && [ "$current" != "$domain" ]; then
+            echo "::error::В настройках Pages стоит домен «$current», а в site/CNAME — «$domain». Не трогаю."
+            exit 1
+          fi
+
+          if [ "$(state "$before")" = approved ]; then
+            echo 'Сертификат уже выпущен — перепривязывать нечего.'
+          else
+            # Сначала проверяем, что запись вообще разрешена, — записью
+            # того же значения. Она ничего не меняет, зато отвечает на
+            # вопрос до того, как домен снят: снять и не суметь вернуть
+            # хуже, чем не начинать.
+            echo
+            echo 'Проверяю право на запись…'
+            code=$(put "$(jq -nc --arg d "$domain" '{cname:$d}')")
+            echo "  ответ $code"
+            case "$code" in
+              200|204) ;;
+              *)
+                echo '::error::Токен не может менять настройки Pages — ничего не трогаю.'
+                cat /tmp/put.out; echo
+                echo 'Сделайте перепривязку руками: Settings → Pages → очистить'
+                echo "Custom domain, сохранить, вписать $domain заново, сохранить."
+                exit 1
+                ;;
+            esac
+
+            echo
+            echo 'Снимаю домен…'
+            code=$(put '{"cname":null}')
+            echo "  ответ $code"
+            if [ "$code" != 204 ] && [ "$code" != 200 ]; then
+              echo '::error::Снять домен не удалось — значит и вернуть нечего, настройки не изменились.'
+              cat /tmp/put.out; echo
+              echo 'Сделайте это руками: Settings → Pages → Custom domain.'
+              exit 1
+            fi
+
+            # С этой секунды и до успешного возврата домен отдаёт 404.
+            # Поэтому возврат — с повторами и без единой паузы между ними.
+            echo "Возвращаю домен $domain…"
+            ok=0
+            for attempt in 1 2 3 4 5; do
+              code=$(put "$(jq -nc --arg d "$domain" '{cname:$d}')")
+              echo "  попытка $attempt: ответ $code"
+              case "$code" in 200|204) ok=1; break ;; esac
+              sleep 3
+            done
+            if [ "$ok" != 1 ]; then
+              echo '::error::Домен снят, но вернуть не удалось — сайт сейчас отдаёт 404 на домене.'
+              cat /tmp/put.out; echo
+              echo 'Впишите домен руками: Settings → Pages → Custom domain → '"$domain"
+              exit 1
+            fi
+            echo 'Домен привязан заново, выпуск сертификата запрошен.'
+          fi
+
+          # Ждём выпуск. Обычно минуты; ограничиваем, чтобы прогон
+          # не висел вечно, — состояние всё равно будет напечатано.
+          echo
+          echo 'Жду выпуск сертификата:'
+          st=''
+          for i in $(seq 20); do
+            sleep 15
+            st=$(state "$(get)")
+            echo "  $((i * 15)) с — $st"
+            [ "$st" = approved ] && break
+          done
+
+          if [ "$st" != approved ]; then
+            echo "::warning::Сертификат пока не выпущен — состояние «$st». Запустите этот прогон ещё раз позже."
+            exit 0
+          fi
+
+          # Без этого набранный в адресной строке домен открывается по http,
+          # и браузер пишет «Не защищено» — уже не из-за чужого сертификата,
+          # а просто потому, что соединение незашифрованное.
+          echo
+          echo 'Включаю обязательный переход на HTTPS…'
+          code=$(put "$(jq -nc --arg d "$domain" '{cname:$d,https_enforced:true}')")
+          echo "  ответ $code"
+
+          after=$(get)
+          echo
+          echo 'Стало:'
+          printf '%s' "$after" | jq -r '
+            "  домен ............ " + (.cname // "не задан"),
+            "  переход на HTTPS . " + (if .https_enforced then "включён" else "выключен" end),
+            "  сертификат ....... " + (.https_certificate.state // "нет данных")'
+
+          echo
+          echo 'Проверяю домен:'
+          for scheme in http https; do
+            c=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -L "$scheme://$domain/" 2>/dev/null) || c=000
+            echo "  $scheme → $c"
+          done
