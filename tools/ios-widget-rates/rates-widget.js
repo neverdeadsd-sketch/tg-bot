@@ -1396,40 +1396,52 @@ function buildAccessoryCircular(model) {
   return widget;
 }
 
+/* Прямоугольник на экране блокировки — самое тесное место из семи:
+ * около 160 на 72 точки, и система отнимает цвет, перекрашивая всё под
+ * обои. Значит, тут дорога каждая строка: две цены, строка аналитики
+ * и график. Проценты прижаты к правому краю гибкой распоркой, а не
+ * отодвинуты от цены на пять точек: цены разной ширины, и при
+ * фиксированном отступе проценты встают лесенкой. */
 function buildAccessoryRectangular(model) {
   const widget = new ListWidget();
   accessoryBackground(widget);
-  widget.setPadding(2, 4, 2, 4);
+  widget.setPadding(3, 5, 3, 5);
+  const width = 148;
   const usd = isNum(model.usd.official) ? model.usd.official : model.usd.market;
 
-  const first = widget.addStack();
-  first.centerAlignContent();
-  const btcText = first.addText(`₿ $${fmt(model.btc.usd, 0)}`);
-  btcText.font = Font.semiboldRoundedSystemFont(13);
-  first.addSpacer(5);
-  const btcDelta = first.addText(arrow(model.btc.change24h) + fmtSigned(model.btc.change24h, 1));
-  btcDelta.font = Font.systemFont(11);
-  first.addSpacer();
+  const line = (price, change) => {
+    const row = widget.addStack();
+    row.centerAlignContent();
+    const left = row.addText(price);
+    left.font = Font.semiboldRoundedSystemFont(14);
+    left.lineLimit = 1;
+    left.minimumScaleFactor = 0.6;
+    row.addSpacer();
+    const right = row.addText(arrow(change) + fmtSigned(change, 1));
+    right.font = Font.systemFont(11);
+    right.lineLimit = 1;
+  };
 
-  const second = widget.addStack();
-  second.centerAlignContent();
-  const usdText = second.addText(`$ ${fmt(usd, 2)} ₽`);
-  usdText.font = Font.semiboldRoundedSystemFont(13);
-  second.addSpacer(5);
-  const usdDelta = second.addText(arrow(model.usd.officialChange) + fmtSigned(model.usd.officialChange, 1));
-  usdDelta.font = Font.systemFont(11);
-  second.addSpacer();
+  line('₿ $' + fmt(model.btc.usd, 0), model.btc.change24h);
+  line('$ ' + fmt(usd, 2) + ' ₽', model.usd.officialChange);
 
+  const stats = widget.addText(statsLine(model.btc.stats));
+  stats.font = Font.systemFont(10);
+  stats.lineLimit = 1;
+  stats.minimumScaleFactor = 0.6;
+
+  // Линия толще и заливка плотнее, чем на домашнем экране: под
+  // полупрозрачностью экрана блокировки тонкий штрих выцветает в царапину.
   const spark = sparkline(model.btc.spark, {
-    width: 140,
+    width,
     height: 14,
     color: Color.white(),
-    fill: new Color('#FFFFFF', 0.25),
-    lineWidth: 1.5
+    fill: new Color('#FFFFFF', 0.35),
+    lineWidth: 2
   });
   if (spark) {
     const image = widget.addImage(spark);
-    image.imageSize = new Size(140, 14);
+    image.imageSize = new Size(width, 14);
   }
   return widget;
 }

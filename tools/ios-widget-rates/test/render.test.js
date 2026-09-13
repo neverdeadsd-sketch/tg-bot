@@ -265,6 +265,9 @@ test('на экране блокировки помещается главное
   assert.match(inline, /₿/u);
   const circular = texts(W.buildWidget(model, 'accessoryCircular')).join(' ');
   assert.match(circular, /68,0K/u);
+  const rectangular = texts(W.buildWidget(model, 'accessoryRectangular')).join(' | ');
+  assert.match(rectangular, /RSI/u, 'в прямоугольник помещается и аналитика, а не только цены');
+  assert.match(rectangular, /84,26|90,00/u, 'курс доллара на месте');
 });
 
 test('маленький виджет слушается параметра', () => {
