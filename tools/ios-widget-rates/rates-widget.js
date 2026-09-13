@@ -1293,11 +1293,18 @@ function assetSection(container, spec, width) {
   rangeRow(container, spec, width);
 }
 
+/* Нижняя строка большого виджета. На главном экране это единственное
+ * место, где помещаются ещё два курса: евро и юань приходят тем же
+ * запросом к ЦБ, что и доллар, и не стоят ни одного лишнего обращения
+ * к сети. Имя источника отсюда убрано — оно нужно при разборе, а не
+ * каждый день, и лежит в подробном отчёте; о подмене данных кэшем
+ * строка по-прежнему предупреждает. */
 function sourcesLine(model) {
   const bits = [];
-  if (model.at) bits.push(model.live ? 'обновлено в ' + clock(model.at) : 'обновлено ' + ago(model.at));
+  if (isNum(model.usd.eur)) bits.push('евро ' + fmt(model.usd.eur, 2));
+  if (isNum(model.usd.cny)) bits.push('юань ' + fmt(model.usd.cny, 2));
   if (model.usd.officialDate) bits.push('ЦБ на ' + dmy(model.usd.officialDate));
-  if (model.btc.source) bits.push(model.btc.source);
+  if (model.at) bits.push(model.live ? 'обновлено в ' + clock(model.at) : 'обновлено ' + ago(model.at));
   if (model.failed.length) bits.push('часть данных из кэша');
   return bits.join(' · ');
 }
