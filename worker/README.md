@@ -75,7 +75,7 @@ Cloudflare хватает с запасом.
 
 | Имя | Значение |
 |---|---|
-| `YOOKASSA_SHOP_ID` | `139865` |
+| `YOOKASSA_SHOP_ID` | `1398365` |
 | `TELEGRAM_ADMIN_CHAT_ID` | ваш id у @userinfobot — если выдаёте вручную |
 | `FULFILMENT_URL` | адрес выдачи в боте — если бот выдаёт сам |
 

@@ -24,7 +24,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=_fresh.sh
 . "$HERE/_fresh.sh"
 _freshen "$@"
-SHOP_ID_DEFAULT='139865'
+SHOP_ID_DEFAULT='1398365'
 
 red()  { printf '\033[0;31m%s\033[0m\n' "$*" >&2; }
 grn()  { printf '\033[0;32m✓\033[0m %s\n' "$*"; }

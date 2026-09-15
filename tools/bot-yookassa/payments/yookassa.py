@@ -87,6 +87,15 @@ class YooKassa:
     async def get_payment(self, payment_id):
         return await self._request('GET', f'/payments/{payment_id}')
 
+    async def check_credentials(self):
+        """Проверяет, что shop_id и ключ приняты. Бросает YooKassaError.
+
+        Читающий запрос: ничего не создаёт и денег не касается. Нужен,
+        чтобы негодная пара обнаруживалась при запуске, а не на первом
+        покупателе, который уже нажал «Оплатить».
+        """
+        await self._request('GET', '/payments?limit=1')
+
 
 def payment_body(order_id, kopecks, description, return_url, metadata=None):
     """Тело запроса на создание платежа.
