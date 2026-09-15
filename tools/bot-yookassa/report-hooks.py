@@ -89,9 +89,20 @@ def main():
     if not ROOT.is_dir():
         sys.exit(f'Нет каталога {ROOT}. Укажите путь к боту первым аргументом.')
 
+    def ours(path):
+        """Наш же модуль оплаты, если он уже установлен.
+
+        Он весь про оплату и подписки, поэтому иначе забивает собой отчёт,
+        в котором ищут код бота, а не наш.
+        """
+        d = path.parent
+        return (d.name == 'payments'
+                and (d / 'yookassa.py').is_file() and (d / 'poller.py').is_file())
+
     files = sorted(p for p in ROOT.rglob('*.py')
                    if '.venv' not in p.parts and 'site-packages' not in p.parts
-                   and '__pycache__' not in p.parts)
+                   and '__pycache__' not in p.parts and 'venv' not in p.parts
+                   and not ours(p))
     if not files:
         sys.exit(f'В {ROOT} нет файлов .py — это точно каталог бота?')
 

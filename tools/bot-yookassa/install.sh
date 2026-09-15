@@ -32,6 +32,35 @@ command -v python3 >/dev/null || die 'нужен python3'
 
 echo "Бот: $BOT_DIR"
 
+# --- чем бот запускается ---------------------------------------------------
+# Зависимости модуля (aiohttp, aiosqlite) стоят там же, где aiogram, —
+# то есть в окружении бота, а не в системном python. Проверять модуль
+# системным значит проверять не то окружение, в котором он будет жить.
+BOT_PY=''
+for candidate in "$BOT_DIR/venv/bin/python" "$BOT_DIR/.venv/bin/python" \
+                 "$BOT_DIR/env/bin/python" "$BOT_DIR/venv/bin/python3" \
+                 "$BOT_DIR/.venv/bin/python3"; do
+  [ -x "$candidate" ] && { BOT_PY="$candidate"; break; }
+done
+if [ -z "$BOT_PY" ]; then
+  # Спрашиваем systemd: в ExecStart записан ровно тот интерпретатор,
+  # которым бот запускается на самом деле.
+  unit=$(grep -rls "$BOT_DIR" /etc/systemd/system/*.service 2>/dev/null | head -1 || true)
+  if [ -n "$unit" ]; then
+    exec_py=$(grep -m1 '^ExecStart=' "$unit" | sed -E 's/^ExecStart=//' | awk '{print $1}')
+    [ -x "$exec_py" ] && BOT_PY="$exec_py"
+    [ -n "$unit" ] && grn "юнит systemd: $(basename "$unit")"
+  fi
+fi
+if [ -n "$BOT_PY" ]; then
+  grn "интерпретатор бота: $BOT_PY"
+else
+  BOT_PY='python3'
+  ylw 'Окружение бота не нашлось — проверяю системным python3.'
+  ylw 'Если бот живёт в venv, укажите его: BOT_PY=/путь/к/venv/bin/python'
+fi
+BOT_PY="${BOT_PY_OVERRIDE:-$BOT_PY}"
+
 # --- куда класть модуль ----------------------------------------------------
 # Рядом с config.py, внутрь того же пакета, что и остальной код бота.
 if [ -d "$BOT_DIR/app" ]; then
@@ -101,27 +130,37 @@ if not missing:
     print('\033[0;32m✓\033[0m config.py: переменные уже есть')
     raise SystemExit
 
-if not re.search(r'\b_env\s*\(', src):
-    print('\033[0;33mconfig.py читает окружение не через _env — допишите сами:\033[0m')
+lines = src.splitlines(keepends=True)
+
+# Пишем в том же виде, в каком config.py читает остальные переменные:
+# у файла уже есть свой способ, и вводить рядом второй — значит оставить
+# следующему читателю загадку, почему их два.
+STYLES = [
+    (r'^[A-Z][A-Z0-9_]*\s*=\s*_env\(',            '{n} = _env("{n}")'),
+    (r'^[A-Z][A-Z0-9_]*\s*=\s*os\.getenv\(',      '{n} = os.getenv("{n}", "")'),
+    (r'^[A-Z][A-Z0-9_]*\s*=\s*os\.environ\.get\(', '{n} = os.environ.get("{n}", "")'),
+]
+
+anchor, template = None, None
+for pattern, tpl in STYLES:
+    hit = max((i for i, l in enumerate(lines) if re.match(pattern, l)), default=None)
+    if hit is not None and (anchor is None or hit > anchor):
+        anchor, template = hit, tpl
+
+if anchor is None:
+    print('\033[0;33mНе нашлось, куда вписать: config.py не читает окружение')
+    print('ни через _env, ни через os.getenv. Допишите сами, рядом с остальными:\033[0m')
     for n in missing:
         print(f'  {n} = os.getenv("{n}", "")')
     raise SystemExit
 
-lines = src.splitlines(keepends=True)
-# Встаём сразу за последним присваиванием вида ИМЯ = _env(...) на верхнем
-# уровне: там же, где живут остальные ключи, а не в конце файла среди
-# производных значений.
-last = max((i for i, l in enumerate(lines)
-            if re.match(r'^[A-Z][A-Z0-9_]*\s*=\s*_env\(', l)), default=None)
-if last is None:
-    print('\033[0;33mНе нашлось, куда вписать. Допишите сами:\033[0m')
-    for n in missing:
-        print(f'  {n} = _env("{n}")')
-    raise SystemExit
-
 block = ['\n', '# Оплата картой через ЮKassa. shop id не секрет, ключ — секрет.\n']
-block += [f'{n} = _env("{n}")\n' for n in missing]
-new = ''.join(lines[:last + 1] + block + lines[last + 1:])
+block += [template.format(n=n) + '\n' for n in missing]
+new = ''.join(lines[:anchor + 1] + block + lines[anchor + 1:])
+
+# os.getenv без import os — это AttributeError при старте бота.
+if 'os.' in template and not re.search(r'^\s*import os\b', new, re.M):
+    new = 'import os\n' + new
 
 try:
     ast.parse(new)
@@ -135,10 +174,52 @@ path.write_text(new, encoding='utf-8')
 print(f'\033[0;32m✓\033[0m config.py: добавлены {", ".join(missing)} (копия: {backup.name})')
 PY
 
-# --- тесты -----------------------------------------------------------------
+# --- проверки в окружении бота --------------------------------------------
+# Ни одна из них не должна обрывать установку. Самое ценное здесь —
+# отчёт в конце, и потерять его из-за упавшей проверки было бы обидно:
+# первый же настоящий прогон так и закончился, ничего не напечатав.
 echo
-echo 'Тесты модуля:'
-( cd "$HERE" && python3 -m unittest discover -s test 2>&1 | tail -3 )
+echo 'Проверки:'
+
+# Модуль должен импортироваться именно у бота: там, где стоит aiogram,
+# стоят и aiohttp с aiosqlite. Если импорт не прошёл — оплата не поднимется
+# при старте, и узнать об этом сейчас дешевле, чем ночью по тишине в заказах.
+if out=$("$BOT_PY" -c "
+import sys; sys.path.insert(0, '$PKG')
+import payments                       # noqa: F401
+print('ok')
+" 2>&1); then
+  grn "модуль импортируется ($BOT_PY)"
+else
+  red "✗ модуль не импортируется интерпретатором $BOT_PY:"
+  printf '%s\n' "$out" | tail -3 | sed 's/^/    /'
+  ylw '  Скорее всего не хватает aiohttp или aiosqlite. Поставьте их тем же'
+  ylw '  интерпретатором, которым запускается бот, и повторите установку:'
+  echo "    sudo $BOT_PY -m pip install aiohttp aiosqlite"
+fi
+
+# Тесты гоняем системным python: им нужен только stdlib и те же два пакета.
+# Падение здесь — повод посмотреть, а не повод остановить установку.
+if out=$( cd "$HERE" && "$BOT_PY" -m unittest discover -s test 2>&1 ); then
+  grn "тесты модуля: $(printf '%s' "$out" | grep -E '^Ran ' || echo пройдены)"
+else
+  ylw 'Тесты не прошли:'
+  printf '%s\n' "$out" | tail -12 | sed 's/^/    /'
+fi
+
+# .env сам по себе ничего не делает: его должен кто-то прочитать.
+# Если не читает никто, ключ в файле есть, а у бота его нет — и оплата
+# молча не работает, без единой ошибки в журнале.
+if grep -rqs 'load_dotenv' "$BOT_DIR" --include='*.py'; then
+  grn '.env читается через load_dotenv'
+elif grep -rqs 'EnvironmentFile' /etc/systemd/system/*.service 2>/dev/null; then
+  grn '.env передаётся через systemd (EnvironmentFile)'
+else
+  ylw '⚠ Не видно, чтобы .env кто-то читал: ни load_dotenv в коде,'
+  ylw '  ни EnvironmentFile в юните systemd. Тогда записанное в .env'
+  ylw '  до бота не доходит, и оплата не заработает молча.'
+  ylw '  Проверьте, откуда бот берёт BOT_TOKEN, — ключи ЮKassa нужны оттуда же.'
+fi
 
 # --- что осталось ----------------------------------------------------------
 cat <<TEXT
@@ -155,4 +236,4 @@ cat <<TEXT
 ────────────────────────────────────────────────────────────────────────
 
 TEXT
-python3 "$HERE/report-hooks.py" "$BOT_DIR"
+python3 "$HERE/report-hooks.py" "$BOT_DIR" || true
