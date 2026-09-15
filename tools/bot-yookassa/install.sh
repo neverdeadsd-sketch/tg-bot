@@ -140,10 +140,14 @@ lines = src.splitlines(keepends=True)
 # Пишем в том же виде, в каком config.py читает остальные переменные:
 # у файла уже есть свой способ, и вводить рядом второй — значит оставить
 # следующему читателю загадку, почему их два.
+# .strip() не украшение: ключ попадает в .env вставкой из буфера, лишний
+# пробел оттуда невидим глазами, а ЮKassa отвечает на него «401
+# invalid_credentials», и искать причину приходится в коде.
+# _env обрезает сам, os.getenv — нет.
 STYLES = [
     (r'^[A-Z][A-Z0-9_]*\s*=\s*_env\(',            '{n} = _env("{n}")'),
-    (r'^[A-Z][A-Z0-9_]*\s*=\s*os\.getenv\(',      '{n} = os.getenv("{n}", "")'),
-    (r'^[A-Z][A-Z0-9_]*\s*=\s*os\.environ\.get\(', '{n} = os.environ.get("{n}", "")'),
+    (r'^[A-Z][A-Z0-9_]*\s*=\s*os\.getenv\(',      '{n} = os.getenv("{n}", "").strip()'),
+    (r'^[A-Z][A-Z0-9_]*\s*=\s*os\.environ\.get\(', '{n} = os.environ.get("{n}", "").strip()'),
 ]
 
 anchor, template = None, None
