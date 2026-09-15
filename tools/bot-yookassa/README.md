@@ -52,28 +52,42 @@ cd tools/bot-yookassa && python3 -m unittest discover -s test
 
 ## Подключение
 
-### 1. Установка
+### 1. Одна команда на сервере
 
 ```bash
-sudo cp -r /opt/hollvpn/tools/bot-yookassa/payments /opt/tg-bot/app/payments
+sudo bash /opt/hollvpn/tools/bot-yookassa/install.sh
 ```
 
-Зависимостей не добавляет: `aiohttp` приходит с aiogram, `aiosqlite`
-у вас уже есть.
+Кладёт модуль рядом с кодом бота, заводит `YOOKASSA_SHOP_ID` и спрашивает
+секретный ключ, дописывает две строки в `config.py` и прогоняет тесты.
+Повторный запуск ничего не портит: сделанное пропускается.
 
-### 2. В `.env`
+Ключ спрашивается с клавиатуры и не появляется ни на экране, ни в истории
+команд, ни в списке процессов — только в `.env` с правами `600`.
+`config.py` правится с проверкой: не разобрался после правки — возвращается
+как был, потому что сломанный `config.py` останавливает бота целиком.
 
+Зависимостей не добавляется: `aiohttp` приходит с aiogram, `aiosqlite`
+уже есть.
+
+Если бот лежит не в `/opt/tg-bot`:
+
+```bash
+sudo BOT_DIR=/путь/к/боту bash /opt/hollvpn/tools/bot-yookassa/install.sh
 ```
-YOOKASSA_SHOP_ID=139865
-YOOKASSA_SECRET_KEY=ключ из кабинета ЮKassa → Интеграция → Ключи API
+
+### 2. Две зацепки в коде
+
+Дальше нужен сам код бота — выдачу подписки и кнопку покупки за него
+не угадать. В конце установки печатается, где они, скорее всего, живут:
+
+```bash
+sudo python3 /opt/hollvpn/tools/bot-yookassa/report-hooks.py /opt/tg-bot
 ```
 
-И в `config.py` рядом с остальными:
-
-```python
-YOOKASSA_SHOP_ID = _env("YOOKASSA_SHOP_ID")
-YOOKASSA_SECRET_KEY = _env("YOOKASSA_SECRET_KEY")
-```
+Вывод — только имена функций, их аргументы и декораторы обработчиков.
+Тел функций, строк и значений там нет вовсе, поэтому его можно показать
+целиком, не вычитывая построчно на предмет токенов.
 
 ### 3. При старте бота
 
