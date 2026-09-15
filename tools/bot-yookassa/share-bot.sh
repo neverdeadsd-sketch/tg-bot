@@ -14,6 +14,13 @@
 #
 set -euo pipefail
 
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Запускать вчерашнюю копию — значит получать вчерашнее поведение.
+# shellcheck source=_fresh.sh
+. "$HERE/_fresh.sh"
+_freshen "$@"
+
 BOT_DIR="${BOT_DIR:-/opt/tg-bot}"
 
 red() { printf '\033[0;31m%s\033[0m\n' "$*" >&2; }
