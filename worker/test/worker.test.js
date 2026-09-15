@@ -46,7 +46,7 @@ function fakeD1() {
 }
 
 const BASE_ENV = {
-  YOOKASSA_SHOP_ID: '139865',
+  YOOKASSA_SHOP_ID: '1398365',
   YOOKASSA_SECRET_KEY: 'test-secret',
   PUBLIC_URL: 'https://hollvpn.ru',
   FULFILMENT_URL: 'https://bot.example/fulfil',

@@ -18,7 +18,7 @@ const { TERMS } = require('../src/config');
 const REAL_FETCH = globalThis.fetch;
 
 const CFG = {
-  shopId: '139865',
+  shopId: '1398365',
   secretKey: 'test-secret',
   publicUrl: 'https://hollvpn.ru',
   fulfilmentUrl: 'https://bot.example/fulfil',
@@ -234,7 +234,7 @@ test('статус заказа не раскрывает чужие данны�
 test('конфигурация не поднимается без адреса выдачи', () => {
   const { load } = require('../src/config');
   const saved = { ...process.env };
-  process.env.YOOKASSA_SHOP_ID = '139865';
+  process.env.YOOKASSA_SHOP_ID = '1398365';
   process.env.YOOKASSA_SECRET_KEY = 'x';
   process.env.PUBLIC_URL = 'https://hollvpn.ru';
   delete process.env.FULFILMENT_URL;
