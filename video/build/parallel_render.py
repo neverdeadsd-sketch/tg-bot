@@ -29,8 +29,16 @@ def main(final="/tmp/video_silent.mp4", workers=4):
     with open(lst, "w") as f:
         for bi in range(n):
             f.write("file '%s/b%02d.mp4'\n" % (SEG, bi))
+    # Единый финальный проход: сегменты склеиваются и перекодируются в один
+    # непрерывный поток с ключевым кадром каждые 2 с. Потоковая склейка (-c copy)
+    # оставляла 20 независимо закодированных кусков и редкие ключевые кадры —
+    # некоторые плееры такое не дотягивали до конца.
     subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-hide_banner", "-loglevel", "error",
-                    "-f", "concat", "-safe", "0", "-i", lst, "-c", "copy", final], check=True)
+                    "-f", "concat", "-safe", "0", "-i", lst,
+                    "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+                    "-profile:v", "high", "-level", "4.0", "-pix_fmt", "yuv420p",
+                    "-g", "60", "-keyint_min", "60", "-sc_threshold", "0",
+                    "-movflags", "+faststart", final], check=True)
     print("ГОТОВО:", final)
 
 
