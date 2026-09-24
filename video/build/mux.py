@@ -6,9 +6,12 @@ import sys
 import imageio_ffmpeg
 
 FF = imageio_ffmpeg.get_ffmpeg_exe()
-VOICE_FX = ("highpass=f=95,lowpass=f=7200,"
-            "equalizer=f=2600:t=q:w=1.4:g=-4,equalizer=f=520:t=q:w=1.2:g=2.5,"
-            "acompressor=threshold=-20dB:ratio=3:attack=8:release=180,"
+# Нейросетевой голос не нужно спасать эквалайзером — только подчистить низ,
+# добавить немного тела и выровнять громкость под вещательные -16 LUFS.
+VOICE_FX = ("highpass=f=70,"
+            "equalizer=f=190:t=q:w=1.0:g=1.5,"
+            "equalizer=f=6500:t=q:w=2.0:g=-1.5,"
+            "acompressor=threshold=-18dB:ratio=2.5:attack=12:release=220,"
             "loudnorm=I=-16:TP=-1.5:LRA=11")
 
 
