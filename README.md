@@ -59,19 +59,23 @@ Jupiter — агрегатор: он сам находит лучшую цену
 
 ### На сервере (рекомендуется: бот должен работать круглосуточно)
 
-Одна команда от root на Ubuntu/Debian. Ставит Docker, если его нет, скачивает бота в `/opt/memebot`,
-спрашивает токен бота и твой Telegram ID, запускает в бумажном режиме:
+Одна команда от root на Ubuntu/Debian. Скачивает бота в `/opt/memebot`, ставит Python-зависимости,
+спрашивает токен бота и твой Telegram ID и запускает бота как службу systemd в бумажном режиме:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/neverdeadsd-sketch/tg-bot/claude/memebot/deploy.sh | bash
 ```
 
-Повторный запуск той же команды обновляет бота и не трогает `.env` и базу.
+Повторный запуск той же команды обновляет бота и не трогает `.env` и базу. Docker не нужен:
+он меняет правила iptables и на сервере с VPN может задеть его трафик. Бот порты не открывает.
 
 ```bash
-cd /opt/memebot && docker compose logs -f     # логи
-nano /opt/memebot/.env && docker compose up -d # поменять настройки
+journalctl -u memebot -f                              # логи
+nano /opt/memebot/.env && systemctl restart memebot   # поменять настройки
+systemctl stop memebot                                # остановить
 ```
+
+Есть и `docker compose up -d --build` — для сервера, где ничего больше не работает.
 
 ### Локально
 
@@ -91,7 +95,7 @@ python -m memebot
 1. Запусти в `paper` на 1–2 недели. Смотри `/status` и `/history`.
 2. Если итог в минусе, меняй фильтры или не переходи на реальные деньги. Это и есть смысл бумаги.
 3. Для реальных сделок: в `.env` поставь `TRADING_MODE=live`, укажи `WALLET_PRIVATE_KEY` и перезапусти
-   (`docker compose up -d`). Бумажная и боевая статистика хранятся раздельно.
+   (`systemctl restart memebot`). Бумажная и боевая статистика хранятся раздельно.
 
 Если хочешь сам подтверждать каждую покупку, поставь `AUTO_BUY=false`: бот будет присылать сигнал
 с кнопкой «Купить», а продавать всё равно будет сам по правилам.
