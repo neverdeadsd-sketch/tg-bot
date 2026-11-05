@@ -253,3 +253,53 @@ async def test_rpc_token_balance_handles_huge_amounts():
         amount, decimals = await rpc.token_balance("OWNER", "MINT")
         assert amount == 123456789012345678901 and decimals == 9
         assert await rpc.get_balance("OWNER") == 5
+
+
+def test_geckoterminal_parse_trending():
+    from memebot.geckoterminal import parse_trending
+
+    payload = {
+        "data": [
+            {"id": "solana_P1", "relationships": {"base_token": {"data": {"id": "solana_MEME1", "type": "token"}}}},
+            {"id": "solana_P2", "relationships": {"base_token": {"data": {"id": "solana_" + SOL_MINT, "type": "token"}}}},
+            {"id": "solana_P3", "relationships": {"base_token": {"data": {"id": "solana_MEME1", "type": "token"}}}},
+            {"id": "eth_P4", "relationships": {"base_token": {"data": {"id": "eth_0xabc", "type": "token"}}}},
+            {"id": "broken"},
+        ]
+    }
+    assert parse_trending(payload) == ["MEME1"]
+    assert parse_trending({"errors": []}) == []
+
+
+async def test_extra_sources_are_merged_and_failures_ignored():
+    def handler(request: httpx.Request):
+        if request.url.path.startswith("/token-boosts/top"):
+            return httpx.Response(200, json=[{"chainId": "solana", "tokenAddress": "A"}])
+        return httpx.Response(200, json=[])
+
+    async def trending():
+        return ["T1", "A"]
+
+    async def broken():
+        raise RuntimeError("down")
+
+    async with client(handler) as http:
+        dex = DexScreener(http, extra_sources=[broken, trending])
+        assert await dex.candidate_mints() == ["T1", "A"]
+
+
+async def test_geckoterminal_client_pages():
+    from memebot.geckoterminal import GeckoTerminal
+
+    pages = []
+
+    def handler(request: httpx.Request):
+        assert request.url.path == "/api/v2/networks/solana/trending_pools"
+        page = request.url.params["page"]
+        pages.append(page)
+        mint = f"MEME{page}"
+        return httpx.Response(200, json={"data": [{"relationships": {"base_token": {"data": {"id": f"solana_{mint}"}}}}]})
+
+    async with client(handler) as http:
+        assert await GeckoTerminal(http).trending_mints() == ["MEME1", "MEME2"]
+    assert pages == ["1", "2"]

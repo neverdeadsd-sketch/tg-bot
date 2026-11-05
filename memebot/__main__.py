@@ -13,6 +13,7 @@ from .config import Settings
 from .dexscreener import DexScreener
 from .engine import Engine
 from .fmt import sol
+from .geckoterminal import GeckoTerminal
 from .http import make_client
 from .jupiter import Jupiter
 from .rugcheck import RugCheck
@@ -54,7 +55,8 @@ async def main() -> int:
             trader = PaperTrader(jupiter, store, settings)
 
         engine = Engine(
-            settings, store, DexScreener(http), RugCheck(http), jupiter, trader,
+            settings, store, DexScreener(http, extra_sources=[GeckoTerminal(http).trending_mints]),
+            RugCheck(http), jupiter, trader,
             make_notifier(bot, settings.admin_chat_id),
         )
         dp = Dispatcher()

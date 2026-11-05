@@ -5,7 +5,7 @@
 """
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Any, Awaitable, Callable, Iterable
 
 import httpx
 from loguru import logger
@@ -79,12 +79,24 @@ def best_pairs(raw_pairs: Iterable[dict[str, Any]], wanted: set[str]) -> dict[st
 
 
 class DexScreener:
-    def __init__(self, http: httpx.AsyncClient, base_url: str = BASE_URL):
+    def __init__(
+        self,
+        http: httpx.AsyncClient,
+        base_url: str = BASE_URL,
+        extra_sources: list[Callable[[], Awaitable[list[str]]]] | None = None,
+    ):
         self.http = http
         self.base = base_url.rstrip("/")
+        self.extra_sources = extra_sources or []
 
     async def candidate_mints(self) -> list[str]:
         seen: dict[str, None] = {}
+        for source in self.extra_sources:
+            try:
+                for mint in await source():
+                    seen.setdefault(mint, None)
+            except Exception as exc:  # дополнительный источник не должен ломать поиск
+                logger.warning("Источник кандидатов {}: {}", getattr(source, "__qualname__", source), exc)
         for path in CANDIDATE_PATHS:
             try:
                 items = await get_json(self.http, self.base + path)
