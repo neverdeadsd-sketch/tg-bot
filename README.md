@@ -57,14 +57,20 @@ Jupiter — агрегатор: он сам находит лучшую цену
 
 ## Запуск
 
-### На сервере через Docker (рекомендуется: бот должен работать круглосуточно)
+### На сервере (рекомендуется: бот должен работать круглосуточно)
+
+Одна команда от root на Ubuntu/Debian. Ставит Docker, если его нет, скачивает бота в `/opt/memebot`,
+спрашивает токен бота и твой Telegram ID, запускает в бумажном режиме:
 
 ```bash
-git clone <этот репозиторий> memebot && cd memebot
-cp .env.example .env
-nano .env                       # TELEGRAM_BOT_TOKEN, ADMIN_CHAT_ID, остальное по желанию
-docker compose up -d --build
-docker compose logs -f          # смотреть, что происходит
+curl -fsSL https://raw.githubusercontent.com/neverdeadsd-sketch/tg-bot/claude/memebot/deploy.sh | bash
+```
+
+Повторный запуск той же команды обновляет бота и не трогает `.env` и базу.
+
+```bash
+cd /opt/memebot && docker compose logs -f     # логи
+nano /opt/memebot/.env && docker compose up -d # поменять настройки
 ```
 
 ### Локально
