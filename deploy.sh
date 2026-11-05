@@ -82,7 +82,8 @@ else
   cp .env.example .env
 
   while :; do
-    read -rp "    Токен бота от @BotFather: " TOKEN < /dev/tty
+    # Токен не показываем на экране, чтобы он не попал на скриншот.
+    read -rsp "    Токен бота от @BotFather (ввод скрыт): " TOKEN < /dev/tty; echo
     TOKEN="$(printf '%s' "$TOKEN" | tr -d '[:space:]')"
     [[ "$TOKEN" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]] && break
     warn "не похоже на токен (пример: 123456789:AAH...). Попробуй ещё раз."
